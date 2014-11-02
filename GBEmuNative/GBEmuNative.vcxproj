@@ -43,6 +43,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <CustomBuildAfterTargets>Link</CustomBuildAfterTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -61,6 +62,13 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <IgnoreSpecificDefaultLibraries>msvcrt</IgnoreSpecificDefaultLibraries>
     </Link>
+    <CustomBuildStep>
+      <Command>copy $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>$(SolutionDir)\workingdir\$(TargetFileName)</Outputs>
+      <Inputs>$(SolutionDir)\workingdir\$(TargetFileName)</Inputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
