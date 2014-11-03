@@ -694,7 +694,7 @@ int main(int argc, char **argv)
 		Janitor j([] { SDL_Quit(); });
 
 		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
-		GameBoy gb("cpu_instrs.gb");
+		GameBoy gb("cpu_instrs\\cpu_instrs.gb");
 		//Rom rom("Tetris (JUE) (V1.1) [!].gb");
 		const auto& gameName = gb.GetRom().GetRomName();
 
