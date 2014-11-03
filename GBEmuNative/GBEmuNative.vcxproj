@@ -62,13 +62,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <IgnoreSpecificDefaultLibraries>msvcrt</IgnoreSpecificDefaultLibraries>
     </Link>
-    <CustomBuildStep>
+    <PostBuildEvent>
       <Command>copy $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
-    </CustomBuildStep>
-    <CustomBuildStep>
-      <Outputs>$(SolutionDir)\workingdir\$(TargetFileName)</Outputs>
-      <Inputs>$(SolutionDir)\workingdir\$(TargetFileName)</Inputs>
-    </CustomBuildStep>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -93,6 +89,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MemoryMappedRegisters.inc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
