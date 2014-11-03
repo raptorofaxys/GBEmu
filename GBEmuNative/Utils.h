@@ -12,6 +12,8 @@
 //bool IsBetween(Uint16 value, Uint16 min, Uint16 max) { return IsBetween<Uint16>(value, min, max); }
 
 Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
+Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
+Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
 
 class Exception
 {

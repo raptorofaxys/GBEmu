@@ -86,14 +86,15 @@ public:
 	static const int kWorkMemoryBase = 0xC000;
 	static const int kWorkMemorySize = 0x2000; // 8k
 
+	static const int kHramMemoryBase = 0xFF80;
+	static const int kHramMemorySize = 0xFF; // last byte is IE register
+
 	// Define memory addresses for all the memory-mapped registers
 	enum class MemoryMappedRegisters
 	{
 #define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) name = addx,
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-		//IF = 0xFF0F, // Interrupt Flag RW
-		//IE = 0xFFFF, // Interrupt Enable RW
 	};
 
 	Memory(const std::shared_ptr<Rom>& rom)
@@ -111,6 +112,10 @@ public:
 		{
 			return m_workMemory[address - kWorkMemoryBase];
 		}
+		else if (IsAddressInRange(address, kHramMemoryBase, kHramMemorySize))
+		{
+			return m_hram[address - kHramMemoryBase];
+		}
 		else
 		{
 			switch (address)
@@ -125,11 +130,11 @@ public:
 		}
 	}
 
-	//Uint16 Read16(Uint16 address)
-	//{
-	//	// Must handle as two reads, because the address can cross range boundaries
-	//	return Read8(address
-	//}
+	Uint16 Read16(Uint16 address)
+	{
+		// Must handle as two reads, because the address can cross range boundaries
+		return Make16(Read8(address + 1), Read8(address));
+	}
 
 	void Write8(Uint16 address, Uint8 value)
 	{
@@ -141,18 +146,20 @@ public:
 		{
 			m_workMemory[address - kWorkMemoryBase] = value;
 		}
+		else if (IsAddressInRange(address, kHramMemoryBase, kHramMemorySize))
+		{
+			m_hram[address - kHramMemoryBase] = value;
+		}
 		else
 		{
-			switch (address)
-			{
-				// Handle writes to all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: m_##name = value; break;
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-			default:
-				throw NotImplementedException();
-			}
+			WriteMemoryMappedRegister(address, value);
 		}
+	}
+
+	void Write16(Uint16 address, Uint16 value)
+	{
+		Write8(address, GetLow8(value));
+		Write8(address + 1, GetHigh8(value));
 	}
 
 private:
@@ -160,6 +167,24 @@ private:
 	bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
 	{
 		return (address >= base) && (address < base + rangeSize);
+	}
+
+	void WriteMemoryMappedRegister(Uint16 address, Uint8 value)
+	{
+		switch (address)
+		{
+		case MemoryMappedRegisters::DIV: value = 0; break;
+		}
+
+		switch (address)
+		{
+			// Handle writes to all the memory-mapped registers
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: m_##name = value; break;
+#include "MemoryMappedRegisters.inc"
+#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+		default:
+			throw NotImplementedException();
+		}
 	}
 	
 	// Declare storage for all the memory-mapped registers
@@ -169,12 +194,21 @@ private:
 
 	std::shared_ptr<Rom> m_pRom;
 	char m_workMemory[kWorkMemorySize];
+	char m_hram[kHramMemorySize];
 };
 
 class Cpu
 {
 public:
 	static Uint32 const kCyclesPerSecond = 4194304;
+
+	enum class FlagBitIndex
+	{
+		Zero = 7,
+		Subtract = 6,
+		HalfCarry = 5,
+		Carry = 4
+	};
 
 	Cpu(const std::shared_ptr<Memory>& memory)
 		: m_pMemory(memory)
@@ -185,6 +219,7 @@ public:
 	void Reset()
 	{
 		m_cyclesRemaining = 0.0f;
+		m_totalOpcodesExecuted = 0;
 
 		IME = true;
 
@@ -195,7 +230,8 @@ public:
 		DE = 0x00D8;
 		HL = 0x014D;
 
-		//(*m_pMemory)[0xFF05] = 0x00;
+		//@TODO: initial state
+		//Write8(Memory::MemoryMappedRegisters::TIMA, 0);
 	}
 
 	void Update(float seconds)
@@ -204,52 +240,278 @@ public:
 		
 		while (m_cyclesRemaining > 0)
 		{
-			m_cyclesConsumedByCurrentInstruction = 0;
 			Uint8 opcode = Fetch8();
 
-			Sint32 instructionCycles = -1;
+			Sint32 C = -1; // number of clock cycles used by the opcode
+
+			//SInt32 SourceCycles = 0;
 
 			switch (opcode)
 			{
-				//@TODO: this will undoubtedly grow and be refactored.  Just want to have a few use cases to factor right.
-			case 0x0: // NOP
+				//@TODO: this will undoubtedly grow and be refactored.  Just want to have a few use cases to factor right.  Lambdas for PLA-like microcode?
+			case 0x00: C = 4; break; // NOP
+
+			case 0x18: // JR n
 				{
-					instructionCycles = 4;
+					C = 8;
+					PC += Fetch8();
 				}
 				break;
-			case 0x21: // LD HL,nn
+			
+			case 0x01: // LD ?,nn
+			case 0x11:
+			case 0x21:
+			case 0x31:
 				{
-					instructionCycles = 12;
-					HL = Fetch16();
+					C = 12;
+					auto value = Fetch16();
+					switch ((opcode >> 4) & 0x3)
+					{
+					case 0: BC = value; break;
+					case 1: DE = value; break;
+					case 2: HL = value; break;
+					case 3: SP = value; break;
+					}
 				}
 				break;
-			case 0x31: // LD SP,nn
+			//case 0x21: C = 12; HL = Fetch16(); break; // LD HL,nn
+			//case 0x31: C = 12; SP = Fetch16(); break; // LD SP,nn
+
+			case 0x3E: C = 8; A = Fetch8(); break; // LD A,n
+			
+			case 0x2A: // LDI A,(HL)
 				{
-					instructionCycles = 12;
-					SP = Fetch16();
+					C = 8;
+					A = Read8(HL);
+					++HL;
 				}
 				break;
-			case 0x3E: // LD A,n
+
+			case 0x03: // INC ?
+			case 0x13:
+			case 0x23:
+			case 0x33:
 				{
-					instructionCycles = 8;
-					A = Fetch8();
+					C = 8;
+					//@TODO: refactor with DEC 0x0B, LD 0x01, etc.?
+					switch ((opcode >> 4) & 0x3)
+					{
+					case 0: ++BC; break;
+					case 1: ++DE; break;
+					case 2: ++HL; break;
+					case 3: ++SP; break;
+					}
 				}
 				break;
+
+			case 0x0B: // DEC ?
+			case 0x1B:
+			case 0x2B:
+			case 0x3B:
+				{
+					C = 8;
+					switch ((opcode >> 4) & 0x3)
+					{
+					case 0: --BC; break;
+					case 1: --DE; break;
+					case 2: --HL; break;
+					case 3: --SP; break;
+					}
+				}
+				break;
+
+			//case 0x78: C = 4; A = B; break; // LD A,B
+			//case 0x79: C = 4; A = C; break; // LD A,C
+			//case 0x7A: C = 4; A = D; break; // LD A,D
+			//case 0x7B: C = 4; A = E; break; // LD A,E
+			//case 0x7C: C = 4; A = H; break; // LD A,H
+			//case 0x7D: C = 4; A = L; break; // LD A,L
+			//case 0x7E: C = 8; A = Read8(HL); break; // LD A,(HL)
+			//case 0x7F: C = 4; A = A; break; // LD A,A
+				// LD A,?
+			case 0x40:
+			case 0x41:
+			case 0x42:
+			case 0x43:
+			case 0x44:
+			case 0x45:
+			case 0x46:
+			case 0x47:
+			case 0x48:
+			case 0x49:
+			case 0x4A:
+			case 0x4B:
+			case 0x4C:
+			case 0x4D:
+			case 0x4E:
+			case 0x4F:
+			case 0x50:
+			case 0x51:
+			case 0x52:
+			case 0x53:
+			case 0x54:
+			case 0x55:
+			case 0x56:
+			case 0x57:
+			case 0x58:
+			case 0x59:
+			case 0x5A:
+			case 0x5B:
+			case 0x5C:
+			case 0x5D:
+			case 0x5E:
+			case 0x5F:
+			case 0x60:
+			case 0x61:
+			case 0x62:
+			case 0x63:
+			case 0x64:
+			case 0x65:
+			case 0x66:
+			case 0x67:
+			case 0x68:
+			case 0x69:
+			case 0x6A:
+			case 0x6B:
+			case 0x6C:
+			case 0x6D:
+			case 0x6E:
+			case 0x6F:
+			case 0x70:
+			case 0x71:
+			case 0x72:
+			case 0x73:
+			case 0x74:
+			case 0x75:
+			//case 0x76: // 0x76 is HALT
+			case 0x77:
+			case 0x78:
+			case 0x79:
+			case 0x7A:
+			case 0x7B:
+			case 0x7C:
+			case 0x7D:
+			case 0x7E:
+			case 0x7F:
+				{
+					C = 4;
+					Uint8 value = 0;
+					switch (opcode & 0x7)
+					{
+					case 0: value = B; break;
+					case 1: value = C; break;
+					case 2: value = D; break;
+					case 3: value = E; break;
+					case 4: value = H; break;
+					case 5: value = L; break;
+					case 6: value = Read8(HL); C += 4; break;
+					case 7: value = A; break;
+					}
+
+					switch ((opcode >> 3) & 0x7)
+					{
+					case 0: B = value; break;
+					case 1: C = value; break;
+					case 2: D = value; break;
+					case 3: E = value; break;
+					case 4: H = value; break;
+					case 5: L = value; break;
+					case 6: Write8(HL, value); C += 4; break;
+					case 7: A = value; break;
+					}
+				}
+				break;
+			//case 0x76: // 0x76 is HALT
+
+			case 0xB0: // OR ?
+			case 0xB1:
+			case 0xB2:
+			case 0xB3:
+			case 0xB4:
+			case 0xB5:
+			case 0xB6:
+			case 0xB7:
+				{
+					C = 4;
+					Uint8 value = 0;
+					switch (opcode & 0x7)
+					{
+					case 0: value = B; break;
+					case 1: value = C; break;
+					case 2: value = D; break;
+					case 3: value = E; break;
+					case 4: value = H; break;
+					case 5: value = L; break;
+					case 6: value = Read8(HL); C += 4; break;
+					case 7: value = A; break;
+					}
+
+					A |= value;
+					SetZeroFromValue(A);
+					ClearSubtract();
+					ClearHalfCarry();
+					ClearCarry();
+				}
+				break;
+			
+			case 0xC1: // POP ?
+			case 0xD1:
+			case 0xE1:
+			case 0xF1:
+				{
+					C = 12;
+					Uint16 value = 0;
+					//@TODO: refactor with Push? must dissociate the notion of reading and writing from the address itself... like for (HL) in LDs
+					switch ((opcode >> 4) & 0x3)
+					{
+					case 0: BC = Pop16(); break;
+					case 1: DE = Pop16(); break;
+					case 2: HL = Pop16(); break;
+					case 3: AF = Pop16(); break;
+					}
+				}
+				break;
+			
+			case 0xC5: // PUSH ?
+			case 0xD5:
+			case 0xE5:
+			case 0xF5:
+				{
+					C = 16;
+					Uint16 value = 0;
+					switch ((opcode >> 4) & 0x3)
+					{
+					case 0: Push16(BC); break;
+					case 1: Push16(DE); break;
+					case 2: Push16(HL); break;
+					case 3: Push16(AF); break;
+					}
+				}
+				break;
+			
 			case 0xC3: // JP nn
 				{
-					instructionCycles = 12;
+					C = 12;
 					auto target = Fetch16();
 					PC = target;
 				}
 				break;
+			case 0xC9: // RET
+				{
+					C = 8;
+					PC = Pop16();
+				}
+				break;
 			case 0xCD: // CALL nn
 				{
-					throw NotImplementedException();
+					C = 12;
+					Push16(PC + 2);
+					PC = Fetch16();
 				}
 				break;
 			case 0xE0: // LD (0xFF00+n),A
 				{
-					instructionCycles = 12;
+					C = 12;
 					auto disp = Fetch8();
 					auto address = disp + 0xFF00;
 					Write8(address, A);
@@ -257,52 +519,104 @@ public:
 				break;
 			case 0xEA: // LD (nn),A
 				{
-					instructionCycles = 16;
+					C = 16;
 					auto address = Fetch16();
 					Write8(address, A);
 				}
 				break;
 			case 0xF3: // DI
 				{
-					instructionCycles = 4;
+					C = 4;
 					IME = false;
 				}
 				break;
+			case 0xD3:
+			case 0xDB:
+			case 0xDD:
+			case 0xE3:
+			case 0xE4:
+			case 0xEB:
+			case 0xEC:
+			case 0xED:
+			case 0xF2:
+			case 0xF4:
+			case 0xFC:
+			case 0xFD:
+				throw Exception("Illegal opcode executed: 0x%02lX", opcode);
+				break;
+
 			default:
 				SDL_assert(false && "Unknown opcode encountered");
 			}
 
-			// Try to time things automatically, 
-			SDL_assert(instructionCycles != -1);
-			SDL_assert(m_cyclesConsumedByCurrentInstruction == instructionCycles);
+			SDL_assert(C != -1);
+			m_cyclesRemaining -= C;
+			++m_totalOpcodesExecuted;
 		}
 	}
 
 private:
-	void ConsumeCycles(Sint32 numCycles)
-	{
-		m_cyclesConsumedByCurrentInstruction += numCycles;
-	}
-
 	Uint8 Fetch8()
 	{
 		auto result = m_pMemory->Read8(PC);
 		++PC;
-		ConsumeCycles(4);
 		return result;
 	}
 
 	Uint16 Fetch16()
 	{
-		auto low = Fetch8();
-		auto high = Fetch8();
-		return Make16(high, low);
+		auto result = m_pMemory->Read16(PC);
+		PC += 2;
+		return result;
+	}
+
+	Uint8 Read8(Uint16 address)
+	{
+		return m_pMemory->Read8(address);
 	}
 
 	void Write8(Uint16 address, Uint8 value)
 	{
 		m_pMemory->Write8(address, value);
-		ConsumeCycles(4);
+	}
+
+	void Push16(Uint16 value)
+	{
+		SP -= 2;
+		m_pMemory->Write16(SP, value);
+	}
+
+	Uint16 Pop16()
+	{
+		auto result = m_pMemory->Read16(SP);
+		SP += 2;
+		return result;
+	}
+
+	void SetZeroFromValue(Uint8 value)
+	{
+		SetFlagValue(FlagBitIndex::Zero, value == 0);
+	}
+
+	void ClearSubtract()
+	{
+		SetFlagValue(FlagBitIndex::Subtract, false);
+	}
+
+	void ClearHalfCarry()
+	{
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+	}
+
+	void ClearCarry()
+	{
+		SetFlagValue(FlagBitIndex::Carry, false);
+	}
+
+	void SetFlagValue(FlagBitIndex position, bool value)
+	{
+		auto bitMask = (1 << static_cast<Uint8>(position));
+		F = value ? (F | bitMask) : (F & ~bitMask);
 	}
 
 	// This macro helps define register pairs that have alternate views.  For example, B and C can be indexed individually as 8-bit registers, but they can also be indexed together as a 16-bit register called BC. 
@@ -330,7 +644,7 @@ private:
 	bool IME; // whether interrupts are enabled - very special register, not memory-mapped
 
 	float m_cyclesRemaining;
-	Sint32 m_cyclesConsumedByCurrentInstruction;
+	Uint32 m_totalOpcodesExecuted;
 
 	std::shared_ptr<Memory> m_pMemory;
 };
