@@ -271,7 +271,10 @@ public:
 	//	}
 	//};
 
+	// Bit parsing template metafunctions
+
 	template <int N> struct b0_2 { enum { Value = N & 0x7 }; };
+	template <int N> struct b3_5 { enum { Value = (N >> 3) & 0x7 }; };
 	template <int N> struct b4_5 { enum { Value = (N >> 4) & 0x3 }; };
 
 	// This reads: parse bits 0 to 2, select from B, C, D, E, H, L, indirect HL, A
@@ -286,6 +289,22 @@ public:
 	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<7>() { return A; }
 	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8() { return b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<b0_2<N>::Value>(); }
 
+	template <int N> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8();
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<0>() { return B; }
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<1>() { return C; }
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<2>() { return D; }
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<3>() { return E; }
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<4>() { return H; }
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<5>() { return L; }
+	//template <> Uint8 b3_5_B_C_D_E_H_L_iHL_A_GetReg8<6>() { return Read8(HL); }
+	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<7>() { return A; }
+	template <int N> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl() { return b3_5_B_C_D_E_H_L_iHL_A_GetReg8<N>(); }
+	template <> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl<6>() { return Read8(HL); }
+	template <int N> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8() { return b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl<b3_5<N>::Value>(); }
+	template <int N> void b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl(Uint8 value) { b3_5_B_C_D_E_H_L_iHL_A_GetReg8<N>() = value; }
+	template <> void b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl<6>(Uint8 value) { Write8(HL, value); }
+	template <int N> void b3_5_B_C_D_E_H_L_iHL_A_Write8(Uint8 value) { b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl<b3_5<N>::Value>(value); }
+
 	template <int N> Uint16& b4_5_BC_DE_HL_SP_GetReg16();
 	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<0>() { return BC; }
 	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<1>() { return DE; }
@@ -296,27 +315,25 @@ public:
 	template <int N> void b4_5_BC_DE_HL_SP_Write16_Impl(Uint16 value) { b4_5_BC_DE_HL_SP_GetReg16<N>() = value; }
 	template <int N> void b4_5_BC_DE_HL_SP_Write16(Uint16 value) { b4_5_BC_DE_HL_SP_Write16_Impl<b4_5<N>::Value>(value); }
 
-			//case 0x01: // LD ?,nn
-			//case 0x11:
-			//case 0x21:
-			//case 0x31:
-			//	{
-			//		instructionCycles = 12;
-			//		auto value = Fetch16();
-			//		switch ((opcode >> 4) & 0x3)
-			//		{
-			//		case 0: BC = value; break;
-			//		case 1: DE = value; break;
-			//		case 2: HL = value; break;
-			//		case 3: SP = value; break;
-			//		}
-			//	}
-			//	break;
+	// Opcode implementations
+	template <int N> void NOP()
+	{
+	}
 
 	template <int N> void LD_0_3__1()
 	{
 		//b4_5_BC_DE_HL_SP_Read16<N>();
 		b4_5_BC_DE_HL_SP_Write16<N>(Fetch16());
+	}
+
+	template <int N> void LD_0_3__6__0_3__E()
+	{
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(Fetch8());
+	}
+
+	template <int N> void JR_18()
+	{
+		PC += Fetch8();
 	}
 
 	// @TODO: test an iHL exception in the GetReg approach
@@ -342,6 +359,8 @@ public:
 		OR(Fetch8());
 	}
 	
+	// End opcode implementations
+
 	void Update(float seconds)
 	{
 		m_cyclesRemaining += seconds * kCyclesPerSecond;
@@ -360,7 +379,7 @@ public:
 		// Each sub-circuit could be represented by a small function, and read/write access could be routed through virtual functions.  This would be slow and relatively mundane.  Instead of the double indirection
 		// of virtual functions, we could simply use std::function (or raw function pointers), but that still means runtime branching.
 		// What's interesting is that the opcode case expression is constant, which means we could use template logic to get the compiler to generate the appropriate code for each individual opcode based on the case expression.
-		// This requires
+		// This requires a case label per opcode, but it generates debuggable code in debug targets and very efficient code in release.  (Many LD variants compile to two MOV instructions.)
 		
 		while (m_cyclesRemaining > 0)
 		{
@@ -368,27 +387,26 @@ public:
 
 			Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
 
-			//SInt32 SourceCycles = 0;
-
 #define OPCODE(code, cycles, name) case code: instructionCycles = (cycles); name<code>(); break;
 			switch (opcode)
 			{
-				//@TODO: this will undoubtedly grow and be refactored.  Just want to have a few use cases to factor right.  Lambdas for PLA-like microcode?
-			case 0x00: instructionCycles = 4; break; // NOP
+			OPCODE(0x00, 4, NOP)
 
-			case 0x18: // JR n
-				{
-					instructionCycles = 8;
-					PC += Fetch8();
-				}
-				break;
+			OPCODE(0x18, 8, JR_18)
 			
 			OPCODE(0x01, 12, LD_0_3__1)
 			OPCODE(0x11, 12, LD_0_3__1)
 			OPCODE(0x21, 12, LD_0_3__1)
 			OPCODE(0x31, 12, LD_0_3__1)
 
-			case 0x3E: instructionCycles = 8; A = Fetch8(); break; // LD A,n
+			OPCODE(0x06, 8, LD_0_3__6__0_3__E)
+			OPCODE(0x0E, 8, LD_0_3__6__0_3__E)
+			OPCODE(0x16, 8, LD_0_3__6__0_3__E)
+			OPCODE(0x1E, 8, LD_0_3__6__0_3__E)
+			OPCODE(0x26, 8, LD_0_3__6__0_3__E)
+			OPCODE(0x2E, 8, LD_0_3__6__0_3__E)
+			OPCODE(0x36, 12, LD_0_3__6__0_3__E)
+			OPCODE(0x3E, 8, LD_0_3__6__0_3__E)
 			
 			case 0x2A: // LDI A,(HL)
 				{
