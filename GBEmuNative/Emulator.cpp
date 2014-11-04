@@ -296,7 +296,6 @@ public:
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<3>() { return E; }
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<4>() { return H; }
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<5>() { return L; }
-	//template <> Uint8 b3_5_B_C_D_E_H_L_iHL_A_GetReg8<6>() { return Read8(HL); }
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<7>() { return A; }
 	template <int N> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl() { return b3_5_B_C_D_E_H_L_iHL_A_GetReg8<N>(); }
 	template <> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl<6>() { return Read8(HL); }
