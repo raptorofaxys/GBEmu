@@ -234,26 +234,112 @@ public:
 		//Write8(Memory::MemoryMappedRegisters::TIMA, 0);
 	}
 
+	//template <int N>
+	//struct OR
+	//{
+	//	void Do(Cpu& cpu)
+	//	{
+	//		case 0xB1:
+	//		case 0xB2:
+	//		case 0xB3:
+	//		case 0xB4:
+	//		case 0xB5:
+	//		case 0xB6:
+	//		case 0xB7:
+	//			{
+	//				C = 4;
+	//				Uint8 value = 0;
+	//				switch (opcode & 0x7)
+	//				{
+	//				case 0: value = B; break;
+	//				case 1: value = C; break;
+	//				case 2: value = D; break;
+	//				case 3: value = E; break;
+	//				case 4: value = H; break;
+	//				case 5: value = L; break;
+	//				case 6: value = Read8(HL); C += 4; break;
+	//				case 7: value = A; break;
+	//				}
+
+	//				A |= value;
+	//				SetZeroFromValue(A);
+	//				ClearSubtract();
+	//				ClearHalfCarry();
+	//				ClearCarry();
+	//			}
+	//			break;
+	//	}
+	//};
+
+	// This reads: bits 0 to 2, select from B, C, D, E, H, L, indirect HL, A
+	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl();
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<0>() { return B; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<1>() { return C; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<2>() { return D; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<3>() { return E; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<4>() { return H; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<5>() { return L; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<6>() { return Read8(HL); }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<7>() { return A; }
+
+	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read() { return b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<N & 0x7>(); }
+
+	void OR(Uint8 value)
+	{
+		A |= value;
+		SetZeroFromValue(A);
+		ClearSubtract();
+		ClearHalfCarry();
+		ClearCarry();
+	}
+
+	template <int N> void OR_B__0_7()
+	{
+		OR(b0_2_B_C_D_E_H_L_iHL_A_Read<N>());
+	}
+	
+	template <int N> void OR_F6()
+	{
+		OR(Fetch8());
+	}
+	
 	void Update(float seconds)
 	{
 		m_cyclesRemaining += seconds * kCyclesPerSecond;
+
+		// We have a few options for implementing opcode lookup and execution.  My goals are:
+		// -first, to have fun with C++
+		// -next, to avoid repetition, thus factoring as much as possible
+		// -lastly, to generate relatively good code if that doesn't mean intefering with the previous two goals
+		//
+		// I do care about readability and maintainability, but this is a weekend exercise with no other developers, and I don't mind winding up with something a bit abstruse if it means the above goals are met.
+		// 
+		// With the above in mind, the brute force implementation approach holds relatively little interest.  What I would like to do is to capture the underlying PLA-like structure of the hardware, where multiplexing
+		// circuitry is reused between different opcodes.  Many things are computed in parallel in the hardware, and the microcode of each opcode acts as a sequencer of sorts, picking and choosing which
+		// outputs get routed to which inputs, and so on.
+		// 
+		// Each sub-circuit could be represented by a small function, and read/write access could be routed through virtual functions.  This would be slow and relatively mundane.  Instead of the double indirection
+		// of virtual functions, we could simply use std::function (or raw function pointers), but that still means runtime branching.
+		// What's interesting is that the opcode case expression is constant, which means we could use template logic to get the compiler to generate the appropriate code for each individual opcode based on the case expression.
+		// This requires
 		
 		while (m_cyclesRemaining > 0)
 		{
 			Uint8 opcode = Fetch8();
 
-			Sint32 C = -1; // number of clock cycles used by the opcode
+			Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
 
 			//SInt32 SourceCycles = 0;
 
+#define OPCODE(code, cycles, name) case code: instructionCycles = (cycles); name<code>(); break;
 			switch (opcode)
 			{
 				//@TODO: this will undoubtedly grow and be refactored.  Just want to have a few use cases to factor right.  Lambdas for PLA-like microcode?
-			case 0x00: C = 4; break; // NOP
+			case 0x00: instructionCycles = 4; break; // NOP
 
 			case 0x18: // JR n
 				{
-					C = 8;
+					instructionCycles = 8;
 					PC += Fetch8();
 				}
 				break;
@@ -263,7 +349,7 @@ public:
 			case 0x21:
 			case 0x31:
 				{
-					C = 12;
+					instructionCycles = 12;
 					auto value = Fetch16();
 					switch ((opcode >> 4) & 0x3)
 					{
@@ -277,11 +363,11 @@ public:
 			//case 0x21: C = 12; HL = Fetch16(); break; // LD HL,nn
 			//case 0x31: C = 12; SP = Fetch16(); break; // LD SP,nn
 
-			case 0x3E: C = 8; A = Fetch8(); break; // LD A,n
+			case 0x3E: instructionCycles = 8; A = Fetch8(); break; // LD A,n
 			
 			case 0x2A: // LDI A,(HL)
 				{
-					C = 8;
+					instructionCycles = 8;
 					A = Read8(HL);
 					++HL;
 				}
@@ -292,7 +378,7 @@ public:
 			case 0x23:
 			case 0x33:
 				{
-					C = 8;
+					instructionCycles = 8;
 					//@TODO: refactor with DEC 0x0B, LD 0x01, etc.?
 					switch ((opcode >> 4) & 0x3)
 					{
@@ -309,7 +395,7 @@ public:
 			case 0x2B:
 			case 0x3B:
 				{
-					C = 8;
+					instructionCycles = 8;
 					switch ((opcode >> 4) & 0x3)
 					{
 					case 0: --BC; break;
@@ -320,14 +406,14 @@ public:
 				}
 				break;
 
-			//case 0x78: C = 4; A = B; break; // LD A,B
-			//case 0x79: C = 4; A = C; break; // LD A,C
-			//case 0x7A: C = 4; A = D; break; // LD A,D
-			//case 0x7B: C = 4; A = E; break; // LD A,E
-			//case 0x7C: C = 4; A = H; break; // LD A,H
-			//case 0x7D: C = 4; A = L; break; // LD A,L
-			//case 0x7E: C = 8; A = Read8(HL); break; // LD A,(HL)
-			//case 0x7F: C = 4; A = A; break; // LD A,A
+			//case 0x78: instructionCycles = 4; A = B; break; // LD A,B
+			//case 0x79: instructionCycles = 4; A = C; break; // LD A,C
+			//case 0x7A: instructionCycles = 4; A = D; break; // LD A,D
+			//case 0x7B: instructionCycles = 4; A = E; break; // LD A,E
+			//case 0x7C: instructionCycles = 4; A = H; break; // LD A,H
+			//case 0x7D: instructionCycles = 4; A = L; break; // LD A,L
+			//case 0x7E: instructionCycles = 8; A = Read8(HL); break; // LD A,(HL)
+			//case 0x7F: instructionCycles = 4; A = A; break; // LD A,A
 				// LD A,?
 			case 0x40:
 			case 0x41:
@@ -394,7 +480,7 @@ public:
 			case 0x7E:
 			case 0x7F:
 				{
-					C = 4;
+					instructionCycles = 4;
 					Uint8 value = 0;
 					switch (opcode & 0x7)
 					{
@@ -404,62 +490,58 @@ public:
 					case 3: value = E; break;
 					case 4: value = H; break;
 					case 5: value = L; break;
-					case 6: value = Read8(HL); C += 4; break;
+					case 6: value = Read8(HL); instructionCycles += 4; break;
 					case 7: value = A; break;
 					}
 
 					switch ((opcode >> 3) & 0x7)
 					{
 					case 0: B = value; break;
-					case 1: C = value; break;
+					case 1: instructionCycles = value; break;
 					case 2: D = value; break;
 					case 3: E = value; break;
 					case 4: H = value; break;
 					case 5: L = value; break;
-					case 6: Write8(HL, value); C += 4; break;
+					case 6: Write8(HL, value); instructionCycles += 4; break;
 					case 7: A = value; break;
 					}
 				}
 				break;
 			//case 0x76: // 0x76 is HALT
 
-			case 0xB0: // OR ?
-			case 0xB1:
-			case 0xB2:
-			case 0xB3:
-			case 0xB4:
-			case 0xB5:
-			case 0xB6:
-			case 0xB7:
-				{
-					C = 4;
-					Uint8 value = 0;
-					switch (opcode & 0x7)
-					{
-					case 0: value = B; break;
-					case 1: value = C; break;
-					case 2: value = D; break;
-					case 3: value = E; break;
-					case 4: value = H; break;
-					case 5: value = L; break;
-					case 6: value = Read8(HL); C += 4; break;
-					case 7: value = A; break;
-					}
-
-					A |= value;
-					SetZeroFromValue(A);
-					ClearSubtract();
-					ClearHalfCarry();
-					ClearCarry();
-				}
-				break;
+			// OR ?
+			OPCODE(0xB0, 4, OR_B__0_7)
+			OPCODE(0xB1, 4, OR_B__0_7)
+			OPCODE(0xB2, 4, OR_B__0_7)
+			OPCODE(0xB3, 4, OR_B__0_7)
+			OPCODE(0xB4, 4, OR_B__0_7)
+			OPCODE(0xB5, 4, OR_B__0_7)
+			OPCODE(0xB6, 8, OR_B__0_7)
+			OPCODE(0xB7, 4, OR_B__0_7)
+			OPCODE(0xF6, 8, OR_F6)
+			//case 0xB0: instructionCycles = 4; OR<0xB0>(); break;
+			//case 0xB1: instructionCycles = 4; OR<0xB1>(); break;
+			//case 0xB2: instructionCycles = 4; OR<0xB2>(); break;
+			//case 0xB3: instructionCycles = 4; OR<0xB3>(); break;
+			//case 0xB4: instructionCycles = 4; OR<0xB4>(); break;
+			//case 0xB5: instructionCycles = 4; OR<0xB5>(); break;
+			//case 0xB6: instructionCycles = 8; OR<0xB6>(); break;
+			//case 0xB7: instructionCycles = 4; OR<0xB7>(); break;
+			//case 0xB0: OR<B0>::Do(*this); break;
+			//case 0xB1: OR<B1>::Do(*this); break;
+			//case 0xB2: OR<B2>::Do(*this); break;
+			//case 0xB3: OR<B3>::Do(*this); break;
+			//case 0xB4: OR<B4>::Do(*this); break;
+			//case 0xB5: OR<B5>::Do(*this); break;
+			//case 0xB6: OR<B6>::Do(*this); break;
+			//case 0xB7: OR<B7>::Do(*this); break;
 			
 			case 0xC1: // POP ?
 			case 0xD1:
 			case 0xE1:
 			case 0xF1:
 				{
-					C = 12;
+					instructionCycles = 12;
 					Uint16 value = 0;
 					//@TODO: refactor with Push? must dissociate the notion of reading and writing from the address itself... like for (HL) in LDs
 					switch ((opcode >> 4) & 0x3)
@@ -477,7 +559,7 @@ public:
 			case 0xE5:
 			case 0xF5:
 				{
-					C = 16;
+					instructionCycles = 16;
 					Uint16 value = 0;
 					switch ((opcode >> 4) & 0x3)
 					{
@@ -491,27 +573,27 @@ public:
 			
 			case 0xC3: // JP nn
 				{
-					C = 12;
+					instructionCycles = 12;
 					auto target = Fetch16();
 					PC = target;
 				}
 				break;
 			case 0xC9: // RET
 				{
-					C = 8;
+					instructionCycles = 8;
 					PC = Pop16();
 				}
 				break;
 			case 0xCD: // CALL nn
 				{
-					C = 12;
+					instructionCycles = 12;
 					Push16(PC + 2);
 					PC = Fetch16();
 				}
 				break;
 			case 0xE0: // LD (0xFF00+n),A
 				{
-					C = 12;
+					instructionCycles = 12;
 					auto disp = Fetch8();
 					auto address = disp + 0xFF00;
 					Write8(address, A);
@@ -519,14 +601,14 @@ public:
 				break;
 			case 0xEA: // LD (nn),A
 				{
-					C = 16;
+					instructionCycles = 16;
 					auto address = Fetch16();
 					Write8(address, A);
 				}
 				break;
 			case 0xF3: // DI
 				{
-					C = 4;
+					instructionCycles = 4;
 					IME = false;
 				}
 				break;
@@ -545,12 +627,13 @@ public:
 				throw Exception("Illegal opcode executed: 0x%02lX", opcode);
 				break;
 
+#undef OPCODE
 			default:
 				SDL_assert(false && "Unknown opcode encountered");
 			}
 
-			SDL_assert(C != -1);
-			m_cyclesRemaining -= C;
+			SDL_assert(instructionCycles != -1);
+			m_cyclesRemaining -= instructionCycles;
 			++m_totalOpcodesExecuted;
 		}
 	}
