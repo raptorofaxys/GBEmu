@@ -271,18 +271,55 @@ public:
 	//	}
 	//};
 
-	// This reads: bits 0 to 2, select from B, C, D, E, H, L, indirect HL, A
-	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl();
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<0>() { return B; }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<1>() { return C; }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<2>() { return D; }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<3>() { return E; }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<4>() { return H; }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<5>() { return L; }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<6>() { return Read8(HL); }
-	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<7>() { return A; }
+	template <int N> struct b0_2 { enum { Value = N & 0x7 }; };
+	template <int N> struct b4_5 { enum { Value = (N >> 4) & 0x3 }; };
 
-	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read() { return b0_2_B_C_D_E_H_L_iHL_A_Read_Impl<N & 0x7>(); }
+	// This reads: parse bits 0 to 2, select from B, C, D, E, H, L, indirect HL, A
+	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl();
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<0>() { return B; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<1>() { return C; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<2>() { return D; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<3>() { return E; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<4>() { return H; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<5>() { return L; }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<6>() { return Read8(HL); }
+	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<7>() { return A; }
+	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8() { return b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<b0_2<N>::Value>(); }
+
+	template <int N> Uint16& b4_5_BC_DE_HL_SP_GetReg16();
+	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<0>() { return BC; }
+	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<1>() { return DE; }
+	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<2>() { return HL; }
+	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<3>() { return SP; }
+	//template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16_Impl() { return b4_5_BC_DE_HL_SP_GetReg16<N>(); }
+	//template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16() { return b4_5_BC_DE_HL_SP_Read16_Impl<b4_5<N>::Value>(); }
+	template <int N> void b4_5_BC_DE_HL_SP_Write16_Impl(Uint16 value) { b4_5_BC_DE_HL_SP_GetReg16<N>() = value; }
+	template <int N> void b4_5_BC_DE_HL_SP_Write16(Uint16 value) { b4_5_BC_DE_HL_SP_Write16_Impl<b4_5<N>::Value>(value); }
+
+			//case 0x01: // LD ?,nn
+			//case 0x11:
+			//case 0x21:
+			//case 0x31:
+			//	{
+			//		instructionCycles = 12;
+			//		auto value = Fetch16();
+			//		switch ((opcode >> 4) & 0x3)
+			//		{
+			//		case 0: BC = value; break;
+			//		case 1: DE = value; break;
+			//		case 2: HL = value; break;
+			//		case 3: SP = value; break;
+			//		}
+			//	}
+			//	break;
+
+	template <int N> void LD_0_3__1()
+	{
+		//b4_5_BC_DE_HL_SP_Read16<N>();
+		b4_5_BC_DE_HL_SP_Write16<N>(Fetch16());
+	}
+
+	// @TODO: test an iHL exception in the GetReg approach
 
 	void OR(Uint8 value)
 	{
@@ -293,11 +330,13 @@ public:
 		ClearCarry();
 	}
 
+	// This reads: OR opcode, starting with 0xBn, with lower nibble values 0-7
 	template <int N> void OR_B__0_7()
 	{
-		OR(b0_2_B_C_D_E_H_L_iHL_A_Read<N>());
+		OR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
 	}
 	
+	// OR opcode F6
 	template <int N> void OR_F6()
 	{
 		OR(Fetch8());
@@ -344,24 +383,10 @@ public:
 				}
 				break;
 			
-			case 0x01: // LD ?,nn
-			case 0x11:
-			case 0x21:
-			case 0x31:
-				{
-					instructionCycles = 12;
-					auto value = Fetch16();
-					switch ((opcode >> 4) & 0x3)
-					{
-					case 0: BC = value; break;
-					case 1: DE = value; break;
-					case 2: HL = value; break;
-					case 3: SP = value; break;
-					}
-				}
-				break;
-			//case 0x21: C = 12; HL = Fetch16(); break; // LD HL,nn
-			//case 0x31: C = 12; SP = Fetch16(); break; // LD SP,nn
+			OPCODE(0x01, 12, LD_0_3__1)
+			OPCODE(0x11, 12, LD_0_3__1)
+			OPCODE(0x21, 12, LD_0_3__1)
+			OPCODE(0x31, 12, LD_0_3__1)
 
 			case 0x3E: instructionCycles = 8; A = Fetch8(); break; // LD A,n
 			
