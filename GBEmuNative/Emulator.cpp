@@ -271,10 +271,15 @@ public:
 	//	}
 	//};
 
+#define VERIFY_OPCODE() SDL_TriggerBreakpoint()
+//#define VERIFY_OPCODE()
+	
 	// Bit parsing template metafunctions
 
 	template <int N> struct b0_2 { enum { Value = N & 0x7 }; };
+	template <int N> struct b3_4 { enum { Value = (N >> 3) & 0x3 }; };
 	template <int N> struct b3_5 { enum { Value = (N >> 3) & 0x7 }; };
+	template <int N> struct b4 { enum { Value = (N >> 4) & 0x1 }; };
 	template <int N> struct b4_5 { enum { Value = (N >> 4) & 0x3 }; };
 
 	// This reads: parse bits 0 to 2, select from B, C, D, E, H, L, indirect HL, A
@@ -289,6 +294,13 @@ public:
 	template <> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<7>() { return A; }
 	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8() { return b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl<b0_2<N>::Value>(); }
 
+	template <int N> bool b3_4_NZ_Z_NC_C_Eval_Impl();
+	template <> bool b3_4_NZ_Z_NC_C_Eval_Impl<0>() { return !GetFlagValue(FlagBitIndex::Zero); } 
+	template <> bool b3_4_NZ_Z_NC_C_Eval_Impl<1>() { return GetFlagValue(FlagBitIndex::Zero); } 
+	template <> bool b3_4_NZ_Z_NC_C_Eval_Impl<2>() { return !GetFlagValue(FlagBitIndex::Carry); } 
+	template <> bool b3_4_NZ_Z_NC_C_Eval_Impl<3>() { return GetFlagValue(FlagBitIndex::Carry); } 
+	template <int N> bool b3_4_NZ_Z_NC_C_Eval() { return b3_4_NZ_Z_NC_C_Eval_Impl<b3_4<N>::Value>(); }
+
 	template <int N> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8();
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<0>() { return B; }
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<1>() { return C; }
@@ -297,12 +309,22 @@ public:
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<4>() { return H; }
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<5>() { return L; }
 	template <> Uint8& b3_5_B_C_D_E_H_L_iHL_A_GetReg8<7>() { return A; }
+	template <int N> Uint16 b3_5_B_C_D_E_H_L_iHL_A_GetAddress();
+	template <> Uint16 b3_5_B_C_D_E_H_L_iHL_A_GetAddress<6>() { return HL; }
 	template <int N> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl() { return b3_5_B_C_D_E_H_L_iHL_A_GetReg8<N>(); }
-	template <> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl<6>() { return Read8(HL); }
+	template <> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl<6>() { VERIFY_OPCODE(); return Read8(b3_5_B_C_D_E_H_L_iHL_A_GetAddress<6>()); }
 	template <int N> Uint8 b3_5_B_C_D_E_H_L_iHL_A_Read8() { return b3_5_B_C_D_E_H_L_iHL_A_Read8_Impl<b3_5<N>::Value>(); }
 	template <int N> void b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl(Uint8 value) { b3_5_B_C_D_E_H_L_iHL_A_GetReg8<N>() = value; }
-	template <> void b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl<6>(Uint8 value) { Write8(HL, value); }
+	template <> void b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl<6>(Uint8 value) { VERIFY_OPCODE(); Write8(b3_5_B_C_D_E_H_L_iHL_A_GetAddress<6>(), value); }
 	template <int N> void b3_5_B_C_D_E_H_L_iHL_A_Write8(Uint8 value) { b3_5_B_C_D_E_H_L_iHL_A_Write8_Impl<b3_5<N>::Value>(value); }
+
+	template <int N> Uint16 b4_iBC_iDE_GetAddress();
+	template <> Uint16 b4_iBC_iDE_GetAddress<0>() { VERIFY_OPCODE(); return BC; }
+	template <> Uint16 b4_iBC_iDE_GetAddress<1>() { VERIFY_OPCODE(); return DE; }
+	template <int N> Uint8 b4_iBC_iDE_Read8_Impl() { VERIFY_OPCODE(); return Read8(b4_iBC_iDE_GetAddress<N>()); }
+	template <int N> Uint8 b4_iBC_iDE_Read8() { return b4_iBC_iDE_Read8_Impl<b4<N>::Value>(); }
+	template <int N> void b4_iBC_iDE_Write8_Impl(Uint8 value) { VERIFY_OPCODE(); Write8(b4_iBC_iDE_GetAddress<N>(), value); }
+	template <int N> void b4_iBC_iDE_Write8(Uint8 value) { b4_iBC_iDE_Write8_Impl<b4<N>::Value>(value); }
 
 	template <int N> Uint16& b4_5_BC_DE_HL_SP_GetReg16();
 	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<0>() { return BC; }
@@ -319,9 +341,14 @@ public:
 	{
 	}
 
+	template <int N> void LD_0_1__A()
+	{
+		SDL_TriggerBreakpoint();
+		A = b4_iBC_iDE_Read8<N>();
+	}
+
 	template <int N> void LD_0_3__1()
 	{
-		//b4_5_BC_DE_HL_SP_Read16<N>();
 		b4_5_BC_DE_HL_SP_Write16<N>(Fetch16());
 	}
 
@@ -335,15 +362,50 @@ public:
 		PC += Fetch8();
 	}
 
-	// @TODO: test an iHL exception in the GetReg approach
+	template <int N> void JR_2_3__0__2_3__8()
+	{
+		if (b3_4_NZ_Z_NC_C_Eval<N>())
+		{
+			PC += Fetch8();
+		}
+	}
+
+	template <int N> void LDI_2_2()
+	{
+		Write8(HL, A);
+		++HL;
+	}
+	
+	template <int N> void LDD_3_2()
+	{
+		Write8(HL, A);
+		--HL;
+	}
+	
+	template <int N> void LDI_2_A()
+	{
+		A = Read8(HL);
+		++HL;
+	}
+
+	template <int N> void LDD_3_A()
+	{
+		A = Read8(HL);
+		--HL;
+	}
+
+	template <int N> void DEC_0_3__5__0_3__D()
+	{
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(b3_5_B_C_D_E_H_L_iHL_A_Read8<N>() - 1);
+	}
 
 	void OR(Uint8 value)
 	{
 		A |= value;
 		SetZeroFromValue(A);
-		ClearSubtract();
-		ClearHalfCarry();
-		ClearCarry();
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, false);
 	}
 
 	// This reads: OR opcode, starting with 0xBn, with lower nibble values 0-7
@@ -353,9 +415,19 @@ public:
 	}
 	
 	// OR opcode F6
-	template <int N> void OR_F6()
+	template <int N> void OR_F_6()
 	{
 		OR(Fetch8());
+	}
+
+	template <int N> void CP_F_E()
+	{
+		auto operand = Fetch8();
+		SetFlagValue(FlagBitIndex::Zero, A == operand);
+		SetFlagValue(FlagBitIndex::Subtract, true);
+		// Note: documentation is flaky here; to verify
+		SetFlagValue(FlagBitIndex::HalfCarry, (A & 0xF) < (operand & 0xF));
+		SetFlagValue(FlagBitIndex::Carry, A < operand);
 	}
 	
 	// End opcode implementations
@@ -391,6 +463,15 @@ public:
 			{
 			OPCODE(0x00, 4, NOP)
 
+			OPCODE(0x05, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x0D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x15, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x1D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x25, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x2D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x35, 8, DEC_0_3__5__0_3__D)
+			OPCODE(0x3D, 4, DEC_0_3__5__0_3__D)
+
 			OPCODE(0x18, 8, JR_18)
 			
 			OPCODE(0x01, 12, LD_0_3__1)
@@ -407,13 +488,18 @@ public:
 			OPCODE(0x36, 12, LD_0_3__6__0_3__E)
 			OPCODE(0x3E, 8, LD_0_3__6__0_3__E)
 			
-			case 0x2A: // LDI A,(HL)
-				{
-					instructionCycles = 8;
-					A = Read8(HL);
-					++HL;
-				}
-				break;
+			OPCODE(0x0A, 8, LD_0_1__A)
+			OPCODE(0x1A, 8, LD_0_1__A)
+
+			OPCODE(0x20, 8, JR_2_3__0__2_3__8)
+			OPCODE(0x28, 8, JR_2_3__0__2_3__8)
+			OPCODE(0x30, 8, JR_2_3__0__2_3__8)
+			OPCODE(0x38, 8, JR_2_3__0__2_3__8)
+			
+			OPCODE(0x22, 8, LDI_2_2)
+			OPCODE(0x32, 8, LDD_3_2)
+			OPCODE(0x2A, 8, LDI_2_A)
+			OPCODE(0x3A, 8, LDD_3_A)
 
 			case 0x03: // INC ?
 			case 0x13:
@@ -560,7 +646,7 @@ public:
 			OPCODE(0xB5, 4, OR_B__0_7)
 			OPCODE(0xB6, 8, OR_B__0_7)
 			OPCODE(0xB7, 4, OR_B__0_7)
-			OPCODE(0xF6, 8, OR_F6)
+			OPCODE(0xF6, 8, OR_F_6)
 			//case 0xB0: instructionCycles = 4; OR<0xB0>(); break;
 			//case 0xB1: instructionCycles = 4; OR<0xB1>(); break;
 			//case 0xB2: instructionCycles = 4; OR<0xB2>(); break;
@@ -654,6 +740,9 @@ public:
 					IME = false;
 				}
 				break;
+
+			OPCODE(0xFE, 8, CP_F_E);
+
 			case 0xD3:
 			case 0xDB:
 			case 0xDD:
@@ -723,25 +812,65 @@ private:
 		SetFlagValue(FlagBitIndex::Zero, value == 0);
 	}
 
-	void ClearSubtract()
-	{
-		SetFlagValue(FlagBitIndex::Subtract, false);
-	}
+	//bool IsZeroFlagSet()
+	//{
+	//	return GetFlagValue(FlagBitIndex::Zero);
+	//}
 
-	void ClearHalfCarry()
-	{
-		SetFlagValue(FlagBitIndex::HalfCarry, false);
-	}
+	//bool IsCarryFlagSet()
+	//{
+	//	return GetFlagValue(FlagBitIndex::Carry);
+	//}
 
-	void ClearCarry()
-	{
-		SetFlagValue(FlagBitIndex::Carry, false);
-	}
+	//void ClearCarry()
+	//{
+	//	SetFlagValue(FlagBitIndex::Carry, false);
+	//}
+
+	//void SetCarry()
+	//{
+	//	SetFlagValue(FlagBitIndex::Carry, true);
+	//}
+
+	//bool IsSubtractFlagSet()
+	//{
+	//	return GetFlagValue(FlagBitIndex::Subtract);
+	//}
+
+	//void ClearSubtract()
+	//{
+	//	SetFlagValue(FlagBitIndex::Subtract, false);
+	//}
+
+	//void SetSubtract()
+	//{
+	//	SetFlagValue(FlagBitIndex::Subtract, true);
+	//}
+
+	//bool IsHalfCarryFlagSet()
+	//{
+	//	return GetFlagValue(FlagBitIndex::HalfCarry);
+	//}
+
+	//void ClearHalfCarry()
+	//{
+	//	SetFlagValue(FlagBitIndex::HalfCarry, false);
+	//}
+
+	//void SetHalfCarry()
+	//{
+	//	SetFlagValue(FlagBitIndex::HalfCarry, true);
+	//}
 
 	void SetFlagValue(FlagBitIndex position, bool value)
 	{
 		auto bitMask = (1 << static_cast<Uint8>(position));
 		F = value ? (F | bitMask) : (F & ~bitMask);
+	}
+
+	bool GetFlagValue(FlagBitIndex position)
+	{
+		return (F & (1 << static_cast<Uint8>(position))) != 0;
 	}
 
 	// This macro helps define register pairs that have alternate views.  For example, B and C can be indexed individually as 8-bit registers, but they can also be indexed together as a 16-bit register called BC. 
