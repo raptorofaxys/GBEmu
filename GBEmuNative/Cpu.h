@@ -248,6 +248,12 @@ public:
 		--HL;
 	}
 
+
+	template <int N> void LD_4_7__0_F__NO_7_6()
+	{
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+	
 	template <int N> void OR_B__0_7()
 	{
 		OR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
@@ -279,6 +285,11 @@ public:
 	template <int N> void HALT_7_6()
 	{
 		m_cpuHalted = true;
+	}
+
+	template <int N> void IllegalOpcode()
+	{
+		throw Exception("Illegal opcode executed: 0x%02lX", N);
 	}
 	
 	///////////////////////////////////////////////////////////////////////////
@@ -345,6 +356,17 @@ public:
 		while (m_cyclesRemaining > 0)
 		{
 			DebugOpcode(Peek8());
+
+			if (m_debuggerState == DebuggerState::SingleStepping)
+			{
+				auto keycode = WaitForKeypress();
+				switch (keycode)
+				{
+				case SDLK_g: m_debuggerState = DebuggerState::Running; break;
+				case SDLK_s: m_debuggerState = DebuggerState::SingleStepping; break;
+				}
+			}
+
 			Uint8 opcode = Fetch8();
 
 			Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
@@ -411,102 +433,72 @@ public:
 			OPCODE(0x30, 8, JR_2_3__0__2_3__8)
 			OPCODE(0x38, 8, JR_2_3__0__2_3__8)
 
-				// LD A,?
-			case 0x40:
-			case 0x41:
-			case 0x42:
-			case 0x43:
-			case 0x44:
-			case 0x45:
-			case 0x46:
-			case 0x47:
-			case 0x48:
-			case 0x49:
-			case 0x4A:
-			case 0x4B:
-			case 0x4C:
-			case 0x4D:
-			case 0x4E:
-			case 0x4F:
-			case 0x50:
-			case 0x51:
-			case 0x52:
-			case 0x53:
-			case 0x54:
-			case 0x55:
-			case 0x56:
-			case 0x57:
-			case 0x58:
-			case 0x59:
-			case 0x5A:
-			case 0x5B:
-			case 0x5C:
-			case 0x5D:
-			case 0x5E:
-			case 0x5F:
-			case 0x60:
-			case 0x61:
-			case 0x62:
-			case 0x63:
-			case 0x64:
-			case 0x65:
-			case 0x66:
-			case 0x67:
-			case 0x68:
-			case 0x69:
-			case 0x6A:
-			case 0x6B:
-			case 0x6C:
-			case 0x6D:
-			case 0x6E:
-			case 0x6F:
-			case 0x70:
-			case 0x71:
-			case 0x72:
-			case 0x73:
-			case 0x74:
-			case 0x75:
-			//case 0x76: // 0x76 is HALT
-			case 0x77:
-			case 0x78:
-			case 0x79:
-			case 0x7A:
-			case 0x7B:
-			case 0x7C:
-			case 0x7D:
-			case 0x7E:
-			case 0x7F:
-				{
-					instructionCycles = 4;
-					Uint8 value = 0;
-					switch (opcode & 0x7)
-					{
-					case 0: value = B; break;
-					case 1: value = C; break;
-					case 2: value = D; break;
-					case 3: value = E; break;
-					case 4: value = H; break;
-					case 5: value = L; break;
-					case 6: value = Read8(HL); instructionCycles += 4; break;
-					case 7: value = A; break;
-					}
-
-					switch ((opcode >> 3) & 0x7)
-					{
-					case 0: B = value; break;
-					case 1: instructionCycles = value; break;
-					case 2: D = value; break;
-					case 3: E = value; break;
-					case 4: H = value; break;
-					case 5: L = value; break;
-					case 6: Write8(HL, value); instructionCycles += 4; break;
-					case 7: A = value; break;
-					}
-				}
-				break;
+			OPCODE(0x40, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x41, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x42, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x43, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x44, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x45, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x46, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x47, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x48, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x49, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x4A, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x4B, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x4C, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x4D, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x4E, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x4F, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x50, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x51, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x52, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x53, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x54, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x55, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x56, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x57, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x58, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x59, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x5A, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x5B, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x5C, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x5D, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x5E, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x5F, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x60, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x61, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x62, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x63, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x64, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x65, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x66, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x67, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x68, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x69, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x6A, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x6B, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x6C, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x6D, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x6E, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x6F, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x70, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x71, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x72, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x73, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x74, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x75, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x77, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x78, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x79, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x7A, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x7B, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x7C, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x7D, 4, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x7E, 8, LD_4_7__0_F__NO_7_6)
+			OPCODE(0x7F, 4, LD_4_7__0_F__NO_7_6)
+			
 			OPCODE(0x76, 4, HALT_7_6);
 
-			// OR ?
 			OPCODE(0xB0, 4, OR_B__0_7)
 			OPCODE(0xB1, 4, OR_B__0_7)
 			OPCODE(0xB2, 4, OR_B__0_7)
@@ -598,20 +590,18 @@ public:
 
 			OPCODE(0xFE, 8, CP_F_E);
 
-			case 0xD3:
-			case 0xDB:
-			case 0xDD:
-			case 0xE3:
-			case 0xE4:
-			case 0xEB:
-			case 0xEC:
-			case 0xED:
-			case 0xF2:
-			case 0xF4:
-			case 0xFC:
-			case 0xFD:
-				throw Exception("Illegal opcode executed: 0x%02lX", opcode);
-				break;
+			OPCODE(0xD3, 4, IllegalOpcode)
+			OPCODE(0xDB, 4, IllegalOpcode)
+			OPCODE(0xDD, 4, IllegalOpcode)
+			OPCODE(0xE3, 4, IllegalOpcode)
+			OPCODE(0xE4, 4, IllegalOpcode)
+			OPCODE(0xEB, 4, IllegalOpcode)
+			OPCODE(0xEC, 4, IllegalOpcode)
+			OPCODE(0xED, 4, IllegalOpcode)
+			OPCODE(0xF2, 4, IllegalOpcode)
+			OPCODE(0xF4, 4, IllegalOpcode)
+			OPCODE(0xFC, 4, IllegalOpcode)
+			OPCODE(0xFD, 4, IllegalOpcode)
 
 #undef OPCODE
 			default:
@@ -621,16 +611,6 @@ public:
 			SDL_assert(instructionCycles != -1);
 			m_cyclesRemaining -= instructionCycles;
 			++m_totalOpcodesExecuted;
-
-			if (m_debuggerState == DebuggerState::SingleStepping)
-			{
-				auto keycode = WaitForKeypress();
-				switch (keycode)
-				{
-				case SDLK_g: m_debuggerState = DebuggerState::Running; break;
-				case SDLK_s: m_debuggerState = DebuggerState::SingleStepping; break;
-				}
-			}
 		}
 	}
 
