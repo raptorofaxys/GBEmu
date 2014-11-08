@@ -88,10 +88,16 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Cpu.cpp" />
     <ClCompile Include="Emulator.cpp" />
+    <ClCompile Include="Memory.cpp" />
+    <ClCompile Include="Rom.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Cpu.h" />
+    <ClInclude Include="Memory.h" />
+    <ClInclude Include="Rom.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>

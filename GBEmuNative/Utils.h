@@ -1,15 +1,13 @@
 #pragma once
 
 #include <functional>
+#include <vector>
+#include <memory>
 
 #include "SDL.h"
 #include <Windows.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-
-//template <typename T>
-//bool IsBetween(T value, T min, T max) { return (value >= min) && (value <= max); }
-//bool IsBetween(Uint16 value, Uint16 min, Uint16 max) { return IsBetween<Uint16>(value, min, max); }
 
 inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
 inline Uint8 GetLow4(Uint8 u8) { return u8 & 0xF; }
@@ -17,6 +15,8 @@ inline Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
 inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
 
 SDL_Keycode WaitForKeypress();
+void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
+std::shared_ptr<std::vector<Uint8>> LoadFileAsByteArray(const char* pFileName);
 
 class Exception
 {
@@ -48,17 +48,6 @@ class NotImplementedException : public Exception
 public:
 	NotImplementedException() : Exception("The function is not implemented.") {}
 };
-
-//template<typename L>
-//struct Janitor
-//{
-//
-//};
-//
-//template<typename L> Janitor<L> MakeJanitor(L& lambda)
-//{
-//	return Janitor<L>(lambda);
-//}
 
 struct Janitor
 {
