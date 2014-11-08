@@ -11,16 +11,19 @@
 //bool IsBetween(T value, T min, T max) { return (value >= min) && (value <= max); }
 //bool IsBetween(Uint16 value, Uint16 min, Uint16 max) { return IsBetween<Uint16>(value, min, max); }
 
-Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
-Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
-Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
+inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
+inline Uint8 GetLow4(Uint8 u8) { return u8 & 0xF; }
+inline Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
+inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
+
+SDL_Keycode WaitForKeypress();
 
 class Exception
 {
 public:
 	Exception(const char* pFormatter, ...)
 	{
-		SDL_assert(false && "Exception being constructed");
+		//SDL_assert(false && "Exception being constructed");
 
 		va_list args;
 		va_start(args, pFormatter);

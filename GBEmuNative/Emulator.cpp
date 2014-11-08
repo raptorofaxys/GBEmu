@@ -129,6 +129,19 @@ public:
 			}
 		}
 	}
+	
+	bool SafeRead8(Uint16 address, Uint8& value)
+	{
+		try
+		{
+			value = Read8(address);
+			return true;
+		}
+		catch (const Exception&)
+		{
+			return false;
+		}
+	}
 
 	Uint16 Read16(Uint16 address)
 	{
@@ -197,18 +210,30 @@ private:
 	char m_hram[kHramMemorySize];
 };
 
+enum class FlagBitIndex
+{
+	Zero = 7,
+	Subtract = 6,
+	HalfCarry = 5,
+	Carry = 4,
+};
+
+namespace FlagBitMask
+{
+	enum Type
+	{
+		Zero = (1 << static_cast<int>(FlagBitIndex::Zero)),
+		Subtract = (1 << static_cast<int>(FlagBitIndex::Subtract)),
+		HalfCarry = (1 << static_cast<int>(FlagBitIndex::HalfCarry)),
+		Carry = (1 << static_cast<int>(FlagBitIndex::Carry)),
+		All = Zero | Subtract | HalfCarry | Carry,
+	};
+}
+
 class Cpu
 {
 public:
 	static Uint32 const kCyclesPerSecond = 4194304;
-
-	enum class FlagBitIndex
-	{
-		Zero = 7,
-		Subtract = 6,
-		HalfCarry = 5,
-		Carry = 4
-	};
 
 	Cpu(const std::shared_ptr<Memory>& memory)
 		: m_pMemory(memory)
@@ -220,6 +245,8 @@ public:
 	{
 		m_cyclesRemaining = 0.0f;
 		m_totalOpcodesExecuted = 0;
+
+		m_cpuHalted = false;
 
 		IME = true;
 
@@ -233,43 +260,6 @@ public:
 		//@TODO: initial state
 		//Write8(Memory::MemoryMappedRegisters::TIMA, 0);
 	}
-
-	//template <int N>
-	//struct OR
-	//{
-	//	void Do(Cpu& cpu)
-	//	{
-	//		case 0xB1:
-	//		case 0xB2:
-	//		case 0xB3:
-	//		case 0xB4:
-	//		case 0xB5:
-	//		case 0xB6:
-	//		case 0xB7:
-	//			{
-	//				C = 4;
-	//				Uint8 value = 0;
-	//				switch (opcode & 0x7)
-	//				{
-	//				case 0: value = B; break;
-	//				case 1: value = C; break;
-	//				case 2: value = D; break;
-	//				case 3: value = E; break;
-	//				case 4: value = H; break;
-	//				case 5: value = L; break;
-	//				case 6: value = Read8(HL); C += 4; break;
-	//				case 7: value = A; break;
-	//				}
-
-	//				A |= value;
-	//				SetZeroFromValue(A);
-	//				ClearSubtract();
-	//				ClearHalfCarry();
-	//				ClearCarry();
-	//			}
-	//			break;
-	//	}
-	//};
 
 #define VERIFY_OPCODE() SDL_TriggerBreakpoint()
 //#define VERIFY_OPCODE()
@@ -364,9 +354,10 @@ public:
 
 	template <int N> void JR_2_3__0__2_3__8()
 	{
+		auto offset = Fetch8();
 		if (b3_4_NZ_Z_NC_C_Eval<N>())
 		{
-			PC += Fetch8();
+			PC += offset;
 		}
 	}
 
@@ -394,9 +385,72 @@ public:
 		--HL;
 	}
 
+	void SetFlagsForAdd(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
+	{
+		if (flagMask & FlagBitMask::Zero)
+		{
+			SetZeroFromValue(A);
+		}
+
+		if (flagMask & FlagBitMask::Subtract)
+		{
+			SetFlagValue(FlagBitIndex::Subtract, false);
+		}
+
+		if (flagMask & FlagBitMask::HalfCarry)
+		{
+			SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand)) > 0xF);
+		}
+
+		if (flagMask & FlagBitMask::Carry)
+		{
+			SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand) > 0xFF);
+		}
+	}
+
+	void SetFlagsForSub(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
+	{
+		if (flagMask & FlagBitMask::Zero)
+		{
+			SetZeroFromValue(A);
+		}
+
+		if (flagMask & FlagBitMask::Subtract)
+		{
+			SetFlagValue(FlagBitIndex::Subtract, true);
+		}
+
+		if (flagMask & FlagBitMask::HalfCarry)
+		{
+			SetFlagValue(FlagBitIndex::HalfCarry, static_cast<Uint16>(GetLow4(oldValue)) >= GetLow4(operand));
+		}
+
+		if (flagMask & FlagBitMask::Carry)
+		{
+			SetFlagValue(FlagBitIndex::Carry, static_cast<Uint16>(oldValue) >= operand);
+		}
+	}
+
 	template <int N> void DEC_0_3__5__0_3__D()
 	{
-		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(b3_5_B_C_D_E_H_L_iHL_A_Read8<N>() - 1);
+		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
+		auto newValue = oldValue - 1;
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetFlagsForSub(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
+		//SetZeroFromValue(newValue);
+		//SetFlagValue(FlagBitIndex::Subtract, true);
+		//SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(oldValue) > 0); // Flaky docs
+	}
+
+	template <int N> void INC_0_3__4__0_3__C()
+	{
+		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
+		auto newValue = oldValue + 1;
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetFlagsForAdd(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
+		//SetZeroFromValue(newValue);
+		//SetFlagValue(FlagBitIndex::Subtract, false);
+		//SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(oldValue) == 0xF); // Flaky docs
 	}
 
 	void OR(Uint8 value)
@@ -413,6 +467,18 @@ public:
 	{
 		OR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
 	}
+
+	template <int N> void ADD_C_6()
+	{
+		auto oldValue = A;
+		auto operand = Fetch8();
+		A = oldValue + operand;
+		SetFlagsForAdd(oldValue, operand);
+		//SetZeroFromValue(A);
+		//SetFlagValue(FlagBitIndex::Subtract, false);
+		//SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand)) > 0xF);
+		//SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand) > 0xFF);
+	}
 	
 	// OR opcode F6
 	template <int N> void OR_F_6()
@@ -426,11 +492,53 @@ public:
 		SetFlagValue(FlagBitIndex::Zero, A == operand);
 		SetFlagValue(FlagBitIndex::Subtract, true);
 		// Note: documentation is flaky here; to verify
-		SetFlagValue(FlagBitIndex::HalfCarry, (A & 0xF) < (operand & 0xF));
+		SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(A) < GetLow4(operand));
 		SetFlagValue(FlagBitIndex::Carry, A < operand);
+	}
+
+	template <int N> void HALT_7_6()
+	{
+		m_cpuHalted = true;
 	}
 	
 	// End opcode implementations
+
+	void DebugOpcode(Uint8 opcode)
+	{
+		static const char* opcodeMnemonics[256] =
+		{
+			// This was preprocessed using macros and a spreadsheet from http://imrannazar.com/Gameboy-Z80-Opcode-Map
+			"NOP", "LD BC,nn", "LD (BC),A", "INC BC", "INC B", "DEC B", "LD B,n", "RLC A", "LD (nn),SP", "ADD HL,BC", "LD A,(BC)", "DEC BC", "INC C", "DEC C", "LD C,n", "RRC A",
+			"STOP", "LD DE,nn", "LD (DE),A", "INC DE", "INC D", "DEC D", "LD D,n", "RL A", "JR n", "ADD HL,DE", "LD A,(DE)", "DEC DE", "INC E", "DEC E", "LD E,n", "RR A",
+			"JR NZ,n", "LD HL,nn", "LDI (HL),A", "INC HL", "INC H", "DEC H", "LD H,n", "DAA", "JR Z,n", "ADD HL,HL", "LDI A,(HL)", "DEC HL", "INC L", "DEC L", "LD L,n", "CPL",
+			"JR NC,n", "LD SP,nn", "LDD (HL),A", "INC SP", "INC (HL)", "DEC (HL)", "LD (HL),n", "SCF", "JR C,n", "ADD HL,SP", "LDD A,(HL)", "DEC SP", "INC A", "DEC A", "LD A,n", "CCF",
+			"LD B,B", "LD B,C", "LD B,D", "LD B,E", "LD B,H", "LD B,L", "LD B,(HL)", "LD B,A", "LD C,B", "LD C,C", "LD C,D", "LD C,E", "LD C,H", "LD C,L", "LD C,(HL)", "LD C,A",
+			"LD D,B", "LD D,C", "LD D,D", "LD D,E", "LD D,H", "LD D,L", "LD D,(HL)", "LD D,A", "LD E,B", "LD E,C", "LD E,D", "LD E,E", "LD E,H", "LD E,L", "LD E,(HL)", "LD E,A",
+			"LD H,B", "LD H,C", "LD H,D", "LD H,E", "LD H,H", "LD H,L", "LD H,(HL)", "LD H,A", "LD L,B", "LD L,C", "LD L,D", "LD L,E", "LD L,H", "LD L,L", "LD L,(HL)", "LD L,A",
+			"LD (HL),B", "LD (HL),C", "LD (HL),D", "LD (HL),E", "LD (HL),H", "LD (HL),L", "HALT", "LD (HL),A", "LD A,B", "LD A,C", "LD A,D", "LD A,E", "LD A,H", "LD A,L", "LD A,(HL)", "LD A,A",
+			"ADD A,B", "ADD A,C", "ADD A,D", "ADD A,E", "ADD A,H", "ADD A,L", "ADD A,(HL)", "ADD A,A", "ADC A,B", "ADC A,C", "ADC A,D", "ADC A,E", "ADC A,H", "ADC A,L", "ADC A,(HL)", "ADC A,A",
+			"SUB A,B", "SUB A,C", "SUB A,D", "SUB A,E", "SUB A,H", "SUB A,L", "SUB A,(HL)", "SUB A,A", "SBC A,B", "SBC A,C", "SBC A,D", "SBC A,E", "SBC A,H", "SBC A,L", "SBC A,(HL)", "SBC A,A",
+			"AND B", "AND C", "AND D", "AND E", "AND H", "AND L", "AND (HL)", "AND A", "XOR B", "XOR C", "XOR D", "XOR E", "XOR H", "XOR L", "XOR (HL)", "XOR A",
+			"OR B", "OR C", "OR D", "OR E", "OR H", "OR L", "OR (HL)", "OR A", "CP B", "CP C", "CP D", "CP E", "CP H", "CP L", "CP (HL)", "CP A",
+			"RET NZ", "POP BC", "JP NZ,nn", "JP nn", "CALL NZ,nn", "PUSH BC", "ADD A,n", "RST 0", "RET Z", "RET", "JP Z,nn", "Ext ops", "CALL Z,nn", "CALL nn", "ADC A,n", "RST 8",
+			"RET NC", "POP DE", "JP NC,nn", "XX", "CALL NC,nn", "PUSH DE", "SUB A,n", "RST 10", "RET C", "RETI", "JP C,nn", "XX", "CALL C,nn", "XX", "SBC A,n", "RST 18",
+			"LDH (n),A", "POP HL", "LDH (C),A", "XX", "XX", "PUSH HL", "AND n", "RST 20", "ADD SP,d", "JP (HL)", "LD (nn),A", "XX", "XX", "XX", "XOR n", "RST 28",
+			"LDH A,(n)", "POP AF", "XX", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,d", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
+		};
+
+		printf("0x%04lX: %s  (0x%02lX)\n", PC, opcodeMnemonics[opcode], opcode);
+		printf("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
+			A,
+			GetFlagValue(FlagBitIndex::Zero) ? "Z" : "z",
+			GetFlagValue(FlagBitIndex::Subtract) ? "S" : "s",
+			GetFlagValue(FlagBitIndex::HalfCarry) ? "H" : "h",
+			GetFlagValue(FlagBitIndex::Carry) ? "C" : "c", 
+			B, C, D, E, H, L);
+		printf("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0);
+		printf("n: 0x%s nn: 0x%s\n", DebugPeek8(PC + 1).c_str(), DebugPeek16(PC + 1).c_str());
+		//printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugPeek8(BC), DebugPeek8(DE), DebugPeek8(HL), DebugPeek16(Peek16(PC + 1)));
+		printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugPeek8(BC).c_str(), DebugPeek8(DE).c_str(), DebugPeek8(HL).c_str());
+	}
 
 	void Update(float seconds)
 	{
@@ -454,6 +562,7 @@ public:
 		
 		while (m_cyclesRemaining > 0)
 		{
+			DebugOpcode(Peek8());
 			Uint8 opcode = Fetch8();
 
 			Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
@@ -471,6 +580,15 @@ public:
 			OPCODE(0x2D, 4, DEC_0_3__5__0_3__D)
 			OPCODE(0x35, 8, DEC_0_3__5__0_3__D)
 			OPCODE(0x3D, 4, DEC_0_3__5__0_3__D)
+
+			OPCODE(0x04, 4, INC_0_3__4__0_3__C)
+			OPCODE(0x0C, 4, INC_0_3__4__0_3__C)
+			OPCODE(0x14, 4, INC_0_3__4__0_3__C)
+			OPCODE(0x1C, 4, INC_0_3__4__0_3__C)
+			OPCODE(0x24, 4, INC_0_3__4__0_3__C)
+			OPCODE(0x2C, 4, INC_0_3__4__0_3__C)
+			OPCODE(0x34, 8, INC_0_3__4__0_3__C)
+			OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
 
 			OPCODE(0x18, 8, JR_18)
 			
@@ -534,14 +652,6 @@ public:
 				}
 				break;
 
-			//case 0x78: instructionCycles = 4; A = B; break; // LD A,B
-			//case 0x79: instructionCycles = 4; A = C; break; // LD A,C
-			//case 0x7A: instructionCycles = 4; A = D; break; // LD A,D
-			//case 0x7B: instructionCycles = 4; A = E; break; // LD A,E
-			//case 0x7C: instructionCycles = 4; A = H; break; // LD A,H
-			//case 0x7D: instructionCycles = 4; A = L; break; // LD A,L
-			//case 0x7E: instructionCycles = 8; A = Read8(HL); break; // LD A,(HL)
-			//case 0x7F: instructionCycles = 4; A = A; break; // LD A,A
 				// LD A,?
 			case 0x40:
 			case 0x41:
@@ -635,7 +745,7 @@ public:
 					}
 				}
 				break;
-			//case 0x76: // 0x76 is HALT
+			OPCODE(0x76, 4, HALT_7_6);
 
 			// OR ?
 			OPCODE(0xB0, 4, OR_B__0_7)
@@ -647,22 +757,8 @@ public:
 			OPCODE(0xB6, 8, OR_B__0_7)
 			OPCODE(0xB7, 4, OR_B__0_7)
 			OPCODE(0xF6, 8, OR_F_6)
-			//case 0xB0: instructionCycles = 4; OR<0xB0>(); break;
-			//case 0xB1: instructionCycles = 4; OR<0xB1>(); break;
-			//case 0xB2: instructionCycles = 4; OR<0xB2>(); break;
-			//case 0xB3: instructionCycles = 4; OR<0xB3>(); break;
-			//case 0xB4: instructionCycles = 4; OR<0xB4>(); break;
-			//case 0xB5: instructionCycles = 4; OR<0xB5>(); break;
-			//case 0xB6: instructionCycles = 8; OR<0xB6>(); break;
-			//case 0xB7: instructionCycles = 4; OR<0xB7>(); break;
-			//case 0xB0: OR<B0>::Do(*this); break;
-			//case 0xB1: OR<B1>::Do(*this); break;
-			//case 0xB2: OR<B2>::Do(*this); break;
-			//case 0xB3: OR<B3>::Do(*this); break;
-			//case 0xB4: OR<B4>::Do(*this); break;
-			//case 0xB5: OR<B5>::Do(*this); break;
-			//case 0xB6: OR<B6>::Do(*this); break;
-			//case 0xB7: OR<B7>::Do(*this); break;
+
+			OPCODE(0xC6, 8, ADD_C_6)
 			
 			case 0xC1: // POP ?
 			case 0xD1:
@@ -766,10 +862,46 @@ public:
 			SDL_assert(instructionCycles != -1);
 			m_cyclesRemaining -= instructionCycles;
 			++m_totalOpcodesExecuted;
+
+			WaitForKeypress();
 		}
 	}
 
 private:
+	std::string DebugPeek8(Uint16 address)
+	{
+		Uint8 value = 0;
+		bool success = m_pMemory->SafeRead8(address, value);
+		char szBuffer[32];
+		_snprintf_s(szBuffer, ARRAY_SIZE(szBuffer), "%02lX", value);
+		return success ? szBuffer : "??";
+	}
+	
+	std::string DebugPeek16(Uint16 address)
+	{
+		return DebugPeek8(address + 1).append(DebugPeek8(address));
+	}
+
+	Uint8 Peek8()
+	{
+		return m_pMemory->Read8(PC);
+	}
+
+	Uint8 Peek8(Uint16 address)
+	{
+		return m_pMemory->Read8(address);
+	}
+
+	Uint16 Peek16()
+	{
+		return m_pMemory->Read16(PC);
+	}
+
+	Uint16 Peek16(Uint16 address)
+	{
+		return m_pMemory->Read16(address);
+	}
+
 	Uint8 Fetch8()
 	{
 		auto result = m_pMemory->Read8(PC);
@@ -812,56 +944,6 @@ private:
 		SetFlagValue(FlagBitIndex::Zero, value == 0);
 	}
 
-	//bool IsZeroFlagSet()
-	//{
-	//	return GetFlagValue(FlagBitIndex::Zero);
-	//}
-
-	//bool IsCarryFlagSet()
-	//{
-	//	return GetFlagValue(FlagBitIndex::Carry);
-	//}
-
-	//void ClearCarry()
-	//{
-	//	SetFlagValue(FlagBitIndex::Carry, false);
-	//}
-
-	//void SetCarry()
-	//{
-	//	SetFlagValue(FlagBitIndex::Carry, true);
-	//}
-
-	//bool IsSubtractFlagSet()
-	//{
-	//	return GetFlagValue(FlagBitIndex::Subtract);
-	//}
-
-	//void ClearSubtract()
-	//{
-	//	SetFlagValue(FlagBitIndex::Subtract, false);
-	//}
-
-	//void SetSubtract()
-	//{
-	//	SetFlagValue(FlagBitIndex::Subtract, true);
-	//}
-
-	//bool IsHalfCarryFlagSet()
-	//{
-	//	return GetFlagValue(FlagBitIndex::HalfCarry);
-	//}
-
-	//void ClearHalfCarry()
-	//{
-	//	SetFlagValue(FlagBitIndex::HalfCarry, false);
-	//}
-
-	//void SetHalfCarry()
-	//{
-	//	SetFlagValue(FlagBitIndex::HalfCarry, true);
-	//}
-
 	void SetFlagValue(FlagBitIndex position, bool value)
 	{
 		auto bitMask = (1 << static_cast<Uint8>(position));
@@ -896,6 +978,7 @@ private:
 	Uint16 SP;
 	Uint16 PC;
 	bool IME; // whether interrupts are enabled - very special register, not memory-mapped
+	bool m_cpuHalted;
 
 	float m_cyclesRemaining;
 	Uint32 m_totalOpcodesExecuted;
@@ -971,12 +1054,12 @@ int main(int argc, char **argv)
 			throw Exception("Couldn't create framebuffer texture");
 		}
 
-		SDL_Event event;
 		bool done = false;
 
 		Uint32 lastTicks = SDL_GetTicks();
 		while (!done)
 		{
+			SDL_Event event;
 		    while (SDL_PollEvent(&event))
 			{
 		        switch (event.type)
