@@ -121,6 +121,7 @@ int main(int argc, char **argv)
 	catch (const Exception& e)
 	{
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Exception: %s", e.GetMessage());
+		SDL_assert(false && "Uncaught exception thrown");
 	}
 
     return 0;

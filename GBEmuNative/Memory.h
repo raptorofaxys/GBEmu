@@ -12,8 +12,11 @@ public:
 	static const int kRomBase = 0x0000;
 	static const int kRomBaseBank00Size = 0x4000;
 	
+	static const int kVramBase = 0x8000;
+	static const int kVramSize = 0x2000;
+
 	static const int kWorkMemoryBase = 0xC000;
-	static const int kWorkMemorySize = 0x2000; // 8k
+	static const int kWorkMemorySize = 0x2000; // 8k, second part is switchable... todo :)
 
 	static const int kHramMemoryBase = 0xFF80;
 	static const int kHramMemorySize = 0xFF; // last byte is IE register
@@ -22,20 +25,41 @@ public:
 	enum class MemoryMappedRegisters
 	{
 #define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) name = addx,
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) name = addx,
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
 	};
 
 	Memory(const std::shared_ptr<Rom>& rom)
 		: m_pRom(rom)
 	{
+		Reset();
 	}
 
-	Uint8 Read8(Uint16 address)
+	void Reset()
 	{
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) m_##name = 0x00;
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) m_##name = 0x00;
+#include "MemoryMappedRegisters.inc"
+#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
+	}
+
+	Uint8 Read8(Uint16 address, bool throwIfUnknown = true, bool* pSuccess = nullptr)
+	{
+		if (pSuccess)
+		{
+			*pSuccess = true;
+		}
+
 		if (IsAddressInRange(address, kRomBase, kRomBaseBank00Size))
 		{
 			return m_pRom->GetRom()[address];
+		}
+		else if (IsAddressInRange(address, kVramBase, kVramSize))
+		{
+			return m_vram[address - kVramBase];
 		}
 		else if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
 		{
@@ -51,25 +75,26 @@ public:
 			{
 				// Handle reads to all the memory-mapped registers
 #define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: return m_##name;
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: return m_##name;
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
 			default:
-				throw NotImplementedException();
+				if (throwIfUnknown)
+				{
+					throw NotImplementedException();
+				}
+				*pSuccess = false;
+				return 0xFF;
 			}
 		}
 	}
 	
 	bool SafeRead8(Uint16 address, Uint8& value)
 	{
-		try
-		{
-			value = Read8(address);
-			return true;
-		}
-		catch (const Exception&)
-		{
-			return false;
-		}
+		bool success = true;
+		value = Read8(address, false, &success);
+		return success;
 	}
 
 	Uint16 Read16(Uint16 address)
@@ -83,6 +108,10 @@ public:
 		if (IsAddressInRange(address, kRomBase, kRomBaseBank00Size))
 		{
 			throw Exception("Attempted to write to ROM area.");
+		}
+		else if (IsAddressInRange(address, kVramBase, kVramSize))
+		{
+			m_vram[address - kVramBase] = value;
 		}
 		else if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
 		{
@@ -122,8 +151,10 @@ private:
 		{
 			// Handle writes to all the memory-mapped registers
 #define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: m_##name = value; break;
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: throw Exception("Write to read-only register"); break;
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
 		default:
 			throw NotImplementedException();
 		}
@@ -131,10 +162,13 @@ private:
 	
 	// Declare storage for all the memory-mapped registers
 #define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) Uint8 m_##name;
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) Uint8 m_##name;
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
 
 	std::shared_ptr<Rom> m_pRom;
+	char m_vram[kVramSize];
 	char m_workMemory[kWorkMemorySize];
 	char m_hram[kHramMemorySize];
 };

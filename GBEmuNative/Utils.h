@@ -14,7 +14,10 @@ inline Uint8 GetLow4(Uint8 u8) { return u8 & 0xF; }
 inline Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
 inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
 
-SDL_Keycode WaitForKeypress();
+// WARING: the following functions eat up all events
+SDL_Keycode DebugCheckForKeypress();
+SDL_Keycode DebugWaitForKeypress();
+
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
 std::shared_ptr<std::vector<Uint8>> LoadFileAsByteArray(const char* pFileName);
 
@@ -23,7 +26,7 @@ class Exception
 public:
 	Exception(const char* pFormatter, ...)
 	{
-		//SDL_assert(false && "Exception being constructed");
+		SDL_assert(false && "Exception being constructed");
 
 		va_list args;
 		va_start(args, pFormatter);

@@ -1,6 +1,6 @@
 #include "Utils.h"
 
-SDL_Keycode WaitForKeypress()
+SDL_Keycode DebugWaitForKeypress()
 {
 	SDL_Event event;
 	for (;;)
@@ -13,6 +13,19 @@ SDL_Keycode WaitForKeypress()
 			}
 		}
 		SDL_Delay(10);
+	}
+	return SDLK_UNKNOWN;
+}
+
+SDL_Keycode DebugCheckForKeypress()
+{
+	SDL_Event event;
+	while (SDL_PollEvent(&event))
+	{
+		switch (event.type)
+		{
+		case SDL_KEYDOWN: return event.key.keysym.sym;
+		}
 	}
 	return SDLK_UNKNOWN;
 }
