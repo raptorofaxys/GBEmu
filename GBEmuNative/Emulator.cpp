@@ -57,8 +57,10 @@ int main(int argc, char **argv)
 		Janitor j([] { SDL_Quit(); });
 
 		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
-		GameBoy gb("cpu_instrs\\cpu_instrs.gb");
-		//Rom rom("Tetris (JUE) (V1.1) [!].gb");
+		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb");
+		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
+		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
+		GameBoy gb("cpu_instrs\\individual\\06-ld r,r.gb");
 		const auto& gameName = gb.GetRom().GetRomName();
 
 		std::shared_ptr<SDL_Window> pWindow(SDL_CreateWindow(gameName.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, GameBoy::kScreenWidth * 4, GameBoy::kScreenHeight * 4, 0), SDL_DestroyWindow);

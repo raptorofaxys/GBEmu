@@ -50,6 +50,7 @@ public:
 		m_totalOpcodesExecuted = 0;
 
 		m_cpuHalted = false;
+		m_cpuStopped = false;
 
 		IME = true;
 
@@ -157,6 +158,18 @@ public:
 	//	OPCODE(0x34, 8, INC_0_3__4__0_3__C)
 	//	OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
 
+	void ADD(Uint8 operand)
+	{
+		auto oldValue = A;
+		A = oldValue + operand;
+		SetFlagsForAdd(oldValue, operand);
+	}
+
+	void ADC(Uint8 operand)
+	{
+		ADD(operand + (GetFlagValue(FlagBitIndex::Carry) ? 1 : 0));
+	}
+
 	void AND(Uint8 value)
 	{
 		A &= value;
@@ -184,14 +197,44 @@ public:
 		SetFlagValue(FlagBitIndex::Carry, false);
 	}
 
+	Uint8 RL(Uint8 oldValue)
+	{
+		Uint8 newValue = (oldValue << 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit0 : 0);
+		SetZeroFromValue(newValue);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit7) != 0);
+		return newValue;
+	}
+
+	Uint8 RR(Uint8 oldValue)
+	{
+		Uint8 newValue = (oldValue >> 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit7 : 0);
+		SetZeroFromValue(newValue);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
+		return newValue;
+	}
+
 	void Call(Uint16 address)
 	{
 		Push16(PC);
 		PC = address;
 	}
 
+	void Ret()
+	{
+		PC = Pop16();
+	}
+
 	template <int N> void NOP_0__0()
 	{
+	}
+
+	template <int N> void LD_0_1__2()
+	{
+		b4_iBC_iDE_Write8<N>(A);
 	}
 
 	template <int N> void LD_0_1__A()
@@ -235,9 +278,29 @@ public:
 		b4_5_BC_DE_HL_SP_Write16<N>(b4_5_BC_DE_HL_SP_Read16<N>() - 1);
 	}
 
-	template <int N> void JR_18()
+	template <int N> void ADD_0_3__9()
+	{
+		auto oldValue = HL;
+		auto operand = b4_5_BC_DE_HL_SP_Read16<N>();
+		HL += operand;
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint32>(GetLow12(oldValue)) + GetLow12(operand)) > 0xFFF);
+		SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint32>(oldValue) + operand) > 0xFFFF);
+	}
+
+	template <int N> void STOP_1__0()
+	{
+		m_cpuStopped = true;
+	}
+
+	template <int N> void JR_1__8()
 	{
 		PC += Fetch8();
+	}
+
+	template <int N> void RR_1__F()
+	{
+		A = RR(A);
 	}
 
 	template <int N> void LDI_2__2()
@@ -281,6 +344,10 @@ public:
 	template <int N> void HALT_7__6()
 	{
 		m_cpuHalted = true;
+		if (!IME)
+		{
+			throw Exception("HALT with IME disabled");
+		}
 	}
 
 	template <int N> void XOR_A__8_F()
@@ -291,6 +358,14 @@ public:
 	template <int N> void OR_B__0_7()
 	{
 		OR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+
+	template <int N> void RET_C_D__0__C_D__8()
+	{
+		if (b3_4_NZ_Z_NC_C_Eval<N>())
+		{
+			Ret();
+		}
 	}
 
 	template <int N> void CALL_C_D__4__C_D__C()
@@ -304,21 +379,17 @@ public:
 
 	template <int N> void ADD_C_6()
 	{
-		auto oldValue = A;
-		auto operand = Fetch8();
-		A = oldValue + operand;
-		SetFlagsForAdd(oldValue, operand);
+		ADD(Fetch8());
+	}
+
+	template <int N> void RL_CB_1__0_7()
+	{
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RL(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>()));
 	}
 	
 	template <int N> void RR_CB_1__8_F()
 	{
-		Uint8 oldValue = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>();
-		Uint8 newValue = (oldValue >> 1) | ((GetFlagValue(FlagBitIndex::Carry) ? 1 : 0) << 7);
-		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
-		SetZeroFromValue(newValue);
-		SetFlagValue(FlagBitIndex::Subtract, false);
-		SetFlagValue(FlagBitIndex::HalfCarry, false);
-		SetFlagValue(FlagBitIndex::Carry, (oldValue & 1) != 0);
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>()));
 	}
 
 	template <int N> void SRL_CB_3__8_F()
@@ -329,7 +400,12 @@ public:
 		SetZeroFromValue(newValue);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
-		SetFlagValue(FlagBitIndex::Carry, (oldValue & 1) != 0);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
+	}
+
+	template <int N> void ADC_C__E()
+	{
+		ADC(Fetch8());
 	}
 
 	template <int N> void SUB_D__6()
@@ -343,6 +419,17 @@ public:
 	template <int N> void AND_E__6()
 	{
 		AND(Fetch8());
+	}
+
+	template <int N> void JP_E__9()
+	{
+		// Bizarre docs: this is listed as JP (HL), but I'm not sure why there is a dereference around HL since the timing and docs both imply it's just PC = HL
+		PC = HL;
+	}
+
+	template <int N> void XOR_E__E()
+	{
+		XOR(Fetch8());
 	}
 
 	template <int N> void OR_F_6()
@@ -422,6 +509,354 @@ public:
 		}
 	}
 
+	Uint16 ExecuteSingleInstruction()
+	{
+		Uint8 opcode = Fetch8();
+		bool unknownOpcode = false;
+
+		Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
+
+#define OPCODE(code, cycles, name) case code: instructionCycles = (cycles); name<code>(); break;
+		switch (opcode)
+		{
+		OPCODE(0x00, 4, NOP_0__0)
+			
+		OPCODE(0x02, 8, LD_0_1__2)
+		OPCODE(0x12, 8, LD_0_1__2)
+
+		OPCODE(0x0A, 8, LD_0_1__A)
+		OPCODE(0x1A, 8, LD_0_1__A)
+
+		OPCODE(0x01, 12, LD_0_3__1)
+		OPCODE(0x11, 12, LD_0_3__1)
+		OPCODE(0x21, 12, LD_0_3__1)
+		OPCODE(0x31, 12, LD_0_3__1)
+
+		OPCODE(0x03, 8, INC_0_3__3)
+		OPCODE(0x13, 8, INC_0_3__3)
+		OPCODE(0x23, 8, INC_0_3__3)
+		OPCODE(0x33, 8, INC_0_3__3)
+
+		OPCODE(0x04, 4, INC_0_3__4__0_3__C)
+		OPCODE(0x0C, 4, INC_0_3__4__0_3__C)
+		OPCODE(0x14, 4, INC_0_3__4__0_3__C)
+		OPCODE(0x1C, 4, INC_0_3__4__0_3__C)
+		OPCODE(0x24, 4, INC_0_3__4__0_3__C)
+		OPCODE(0x2C, 4, INC_0_3__4__0_3__C)
+		OPCODE(0x34, 8, INC_0_3__4__0_3__C)
+		OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
+
+		OPCODE(0x05, 4, DEC_0_3__5__0_3__D)
+		OPCODE(0x0D, 4, DEC_0_3__5__0_3__D)
+		OPCODE(0x15, 4, DEC_0_3__5__0_3__D)
+		OPCODE(0x1D, 4, DEC_0_3__5__0_3__D)
+		OPCODE(0x25, 4, DEC_0_3__5__0_3__D)
+		OPCODE(0x2D, 4, DEC_0_3__5__0_3__D)
+		OPCODE(0x35, 8, DEC_0_3__5__0_3__D)
+		OPCODE(0x3D, 4, DEC_0_3__5__0_3__D)
+
+		OPCODE(0x06, 8, LD_0_3__6__0_3__E)
+		OPCODE(0x0E, 8, LD_0_3__6__0_3__E)
+		OPCODE(0x16, 8, LD_0_3__6__0_3__E)
+		OPCODE(0x1E, 8, LD_0_3__6__0_3__E)
+		OPCODE(0x26, 8, LD_0_3__6__0_3__E)
+		OPCODE(0x2E, 8, LD_0_3__6__0_3__E)
+		OPCODE(0x36, 12, LD_0_3__6__0_3__E)
+		OPCODE(0x3E, 8, LD_0_3__6__0_3__E)
+
+		OPCODE(0x09, 8, ADD_0_3__9)
+		OPCODE(0x19, 8, ADD_0_3__9)
+		OPCODE(0x29, 8, ADD_0_3__9)
+		OPCODE(0x39, 8, ADD_0_3__9)
+			
+		OPCODE(0x0B, 8, DEC_0_3__B)
+		OPCODE(0x1B, 8, DEC_0_3__B)
+		OPCODE(0x2B, 8, DEC_0_3__B)
+		OPCODE(0x3B, 8, DEC_0_3__B)
+
+		OPCODE(0x10, 4, STOP_1__0)
+
+		OPCODE(0x18, 8, JR_1__8)
+
+		OPCODE(0x1F, 4, RR_1__F)
+
+		OPCODE(0x22, 8, LDI_2__2)
+		OPCODE(0x32, 8, LDD_3__2)
+		OPCODE(0x2A, 8, LDI_2__A)
+		OPCODE(0x3A, 8, LDD_3__A)
+
+		OPCODE(0x20, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x28, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x30, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x38, 8, JR_2_3__0__2_3__8)
+
+		OPCODE(0x40, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x41, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x42, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x43, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x44, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x45, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x46, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x47, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x48, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x49, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x4A, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x4B, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x4C, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x4D, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x4E, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x4F, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x50, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x51, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x52, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x53, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x54, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x55, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x56, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x57, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x58, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x59, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x5A, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x5B, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x5C, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x5D, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x5E, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x5F, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x60, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x61, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x62, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x63, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x64, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x65, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x66, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x67, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x68, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x69, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x6A, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x6B, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x6C, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x6D, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x6E, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x6F, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x70, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x71, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x72, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x73, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x74, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x75, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x77, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x78, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x79, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x7A, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x7B, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x7C, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x7D, 4, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x7E, 8, LD_4_7__0_F__NO_7__6)
+		OPCODE(0x7F, 4, LD_4_7__0_F__NO_7__6)
+			
+		OPCODE(0x76, 4, HALT_7__6)
+
+		OPCODE(0xA8, 4, XOR_A__8_F)
+		OPCODE(0xA9, 4, XOR_A__8_F)
+		OPCODE(0xAA, 4, XOR_A__8_F)
+		OPCODE(0xAB, 4, XOR_A__8_F)
+		OPCODE(0xAC, 4, XOR_A__8_F)
+		OPCODE(0xAD, 4, XOR_A__8_F)
+		OPCODE(0xAE, 8, XOR_A__8_F)
+		OPCODE(0xAF, 4, XOR_A__8_F)
+
+		OPCODE(0xB0, 4, OR_B__0_7)
+		OPCODE(0xB1, 4, OR_B__0_7)
+		OPCODE(0xB2, 4, OR_B__0_7)
+		OPCODE(0xB3, 4, OR_B__0_7)
+		OPCODE(0xB4, 4, OR_B__0_7)
+		OPCODE(0xB5, 4, OR_B__0_7)
+		OPCODE(0xB6, 8, OR_B__0_7)
+		OPCODE(0xB7, 4, OR_B__0_7)
+
+		case 0xC1: // POP ?
+		case 0xD1:
+		case 0xE1:
+		case 0xF1:
+			{
+				instructionCycles = 12;
+				Uint16 value = 0;
+				//@TODO: refactor with Push? must dissociate the notion of reading and writing from the address itself... like for (HL) in LDs
+				switch ((opcode >> 4) & 0x3)
+				{
+				case 0: BC = Pop16(); break;
+				case 1: DE = Pop16(); break;
+				case 2: HL = Pop16(); break;
+				case 3: AF = Pop16(); break;
+				}
+			}
+			break;
+			
+		case 0xC3: // JP nn
+			{
+				instructionCycles = 12;
+				auto target = Fetch16();
+				PC = target;
+			}
+			break;
+
+		OPCODE(0xC4, 12, CALL_C_D__4__C_D__C)
+		OPCODE(0xD4, 12, CALL_C_D__4__C_D__C)
+		OPCODE(0xCC, 12, CALL_C_D__4__C_D__C)
+		OPCODE(0xDC, 12, CALL_C_D__4__C_D__C)
+
+		case 0xC5: // PUSH ?
+		case 0xD5:
+		case 0xE5:
+		case 0xF5:
+			{
+				instructionCycles = 16;
+				Uint16 value = 0;
+				switch ((opcode >> 4) & 0x3)
+				{
+				case 0: Push16(BC); break;
+				case 1: Push16(DE); break;
+				case 2: Push16(HL); break;
+				case 3: Push16(AF); break;
+				}
+			}
+			break;
+			
+		OPCODE(0xC6, 8, ADD_C_6)
+
+		case 0xC9: // RET
+			{
+				instructionCycles = 8;
+				Ret();
+			}
+			break;
+		case 0xCB: // Extended opcodes
+			{
+				opcode = Fetch8();
+				switch (opcode)
+				{
+					OPCODE(0x10, 8, RL_CB_1__0_7)
+					OPCODE(0x11, 8, RL_CB_1__0_7)
+					OPCODE(0x12, 8, RL_CB_1__0_7)
+					OPCODE(0x13, 8, RL_CB_1__0_7)
+					OPCODE(0x14, 8, RL_CB_1__0_7)
+					OPCODE(0x15, 8, RL_CB_1__0_7)
+					OPCODE(0x16, 16, RL_CB_1__0_7)
+					OPCODE(0x17, 8, RL_CB_1__0_7)
+							 
+					OPCODE(0x18, 8, RR_CB_1__8_F)
+					OPCODE(0x19, 8, RR_CB_1__8_F)
+					OPCODE(0x1A, 8, RR_CB_1__8_F)
+					OPCODE(0x1B, 8, RR_CB_1__8_F)
+					OPCODE(0x1C, 8, RR_CB_1__8_F)
+					OPCODE(0x1D, 8, RR_CB_1__8_F)
+					OPCODE(0x1E, 12, RR_CB_1__8_F)
+					OPCODE(0x1F, 8, RR_CB_1__8_F)
+
+					OPCODE(0x38, 8, SRL_CB_3__8_F)
+					OPCODE(0x39, 8, SRL_CB_3__8_F)
+					OPCODE(0x3A, 8, SRL_CB_3__8_F)
+					OPCODE(0x3B, 8, SRL_CB_3__8_F)
+					OPCODE(0x3C, 8, SRL_CB_3__8_F)
+					OPCODE(0x3D, 8, SRL_CB_3__8_F)
+					OPCODE(0x3E, 16, SRL_CB_3__8_F)
+					OPCODE(0x3F, 8, SRL_CB_3__8_F)
+				default:
+					{
+						// Back out and let the unknown opcode handler do its job
+						--PC;
+						opcode = 0xCB;
+						unknownOpcode = true;
+					}
+					break;
+				}
+			}
+			break;
+
+		case 0xCD: // CALL nn
+			{
+				instructionCycles = 12;
+				auto address = Fetch16();
+				Call(address);
+			}
+			break;
+
+		OPCODE(0xCE, 8, ADC_C__E)
+
+		OPCODE(0xC0, 8, RET_C_D__0__C_D__8)
+		OPCODE(0xC8, 8, RET_C_D__0__C_D__8)
+		OPCODE(0xD0, 8, RET_C_D__0__C_D__8)
+		OPCODE(0xD8, 8, RET_C_D__0__C_D__8)
+
+		OPCODE(0xD6, 8, SUB_D__6)
+
+		OPCODE(0xE6, 8, AND_E__6)
+
+		OPCODE(0xE9, 4, JP_E__9)
+
+		OPCODE(0xF6, 8, OR_F_6)
+
+		case 0xE0: // LD (0xFF00+n),A
+			{
+				instructionCycles = 12;
+				auto displacement = Fetch8();
+				auto address = displacement + 0xFF00;
+				Write8(address, A);
+			}
+			break;
+
+		OPCODE(0xEE, 8, XOR_E__E)
+
+		case 0xEA: // LD (nn),A
+			{
+				instructionCycles = 16;
+				auto address = Fetch16();
+				Write8(address, A);
+			}
+			break;
+
+		OPCODE(0xF0, 12, LDH_F__0)
+
+		case 0xF3: // DI
+			{
+				instructionCycles = 4;
+				IME = false;
+			}
+			break;
+
+		OPCODE(0xFA, 16, LD_F__A);
+
+		OPCODE(0xFE, 8, CP_F_E);
+
+		OPCODE(0xD3, 4, IllegalOpcode)
+		OPCODE(0xDB, 4, IllegalOpcode)
+		OPCODE(0xDD, 4, IllegalOpcode)
+		OPCODE(0xE3, 4, IllegalOpcode)
+		OPCODE(0xE4, 4, IllegalOpcode)
+		OPCODE(0xEB, 4, IllegalOpcode)
+		OPCODE(0xEC, 4, IllegalOpcode)
+		OPCODE(0xED, 4, IllegalOpcode)
+		OPCODE(0xF2, 4, IllegalOpcode)
+		OPCODE(0xF4, 4, IllegalOpcode)
+		OPCODE(0xFC, 4, IllegalOpcode)
+		OPCODE(0xFD, 4, IllegalOpcode)
+
+#undef OPCODE
+		default:
+			unknownOpcode = true;
+			break;
+		}
+
+		if (unknownOpcode)
+		{
+			printf("Unknown opcode encountered after %d opcodes: 0x%02lX\n", m_totalOpcodesExecuted, opcode);
+			printf("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC).c_str(), DebugStringPeek16(PC).c_str());
+			SDL_assert(false && "Unknown opcode encountered");
+		}
+
+		return instructionCycles;
+	}
+
 	void Update(float seconds)
 	{
 		m_cyclesRemaining += seconds * kCyclesPerSecond;
@@ -462,314 +897,17 @@ public:
 			case SDLK_s: m_debuggerState = DebuggerState::SingleStepping; break;
 			}
 
-			Uint8 opcode = Fetch8();
-			bool unknownOpcode = false;
-
 			Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
-
-#define OPCODE(code, cycles, name) case code: instructionCycles = (cycles); name<code>(); break;
-			switch (opcode)
+			if (!m_cpuHalted && !m_cpuStopped)
 			{
-			OPCODE(0x00, 4, NOP_0__0)
-			
-			OPCODE(0x0A, 8, LD_0_1__A)
-			OPCODE(0x1A, 8, LD_0_1__A)
-
-			OPCODE(0x01, 12, LD_0_3__1)
-			OPCODE(0x11, 12, LD_0_3__1)
-			OPCODE(0x21, 12, LD_0_3__1)
-			OPCODE(0x31, 12, LD_0_3__1)
-
-			OPCODE(0x03, 8, INC_0_3__3)
-			OPCODE(0x13, 8, INC_0_3__3)
-			OPCODE(0x23, 8, INC_0_3__3)
-			OPCODE(0x33, 8, INC_0_3__3)
-
-			OPCODE(0x04, 4, INC_0_3__4__0_3__C)
-			OPCODE(0x0C, 4, INC_0_3__4__0_3__C)
-			OPCODE(0x14, 4, INC_0_3__4__0_3__C)
-			OPCODE(0x1C, 4, INC_0_3__4__0_3__C)
-			OPCODE(0x24, 4, INC_0_3__4__0_3__C)
-			OPCODE(0x2C, 4, INC_0_3__4__0_3__C)
-			OPCODE(0x34, 8, INC_0_3__4__0_3__C)
-			OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
-
-			OPCODE(0x05, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x0D, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x15, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x1D, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x25, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x2D, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x35, 8, DEC_0_3__5__0_3__D)
-			OPCODE(0x3D, 4, DEC_0_3__5__0_3__D)
-
-			OPCODE(0x06, 8, LD_0_3__6__0_3__E)
-			OPCODE(0x0E, 8, LD_0_3__6__0_3__E)
-			OPCODE(0x16, 8, LD_0_3__6__0_3__E)
-			OPCODE(0x1E, 8, LD_0_3__6__0_3__E)
-			OPCODE(0x26, 8, LD_0_3__6__0_3__E)
-			OPCODE(0x2E, 8, LD_0_3__6__0_3__E)
-			OPCODE(0x36, 12, LD_0_3__6__0_3__E)
-			OPCODE(0x3E, 8, LD_0_3__6__0_3__E)
-			
-			OPCODE(0x0B, 8, DEC_0_3__B)
-			OPCODE(0x1B, 8, DEC_0_3__B)
-			OPCODE(0x2B, 8, DEC_0_3__B)
-			OPCODE(0x3B, 8, DEC_0_3__B)
-
-			OPCODE(0x18, 8, JR_18)
-
-			OPCODE(0x22, 8, LDI_2__2)
-			OPCODE(0x32, 8, LDD_3__2)
-			OPCODE(0x2A, 8, LDI_2__A)
-			OPCODE(0x3A, 8, LDD_3__A)
-
-			OPCODE(0x20, 8, JR_2_3__0__2_3__8)
-			OPCODE(0x28, 8, JR_2_3__0__2_3__8)
-			OPCODE(0x30, 8, JR_2_3__0__2_3__8)
-			OPCODE(0x38, 8, JR_2_3__0__2_3__8)
-
-			OPCODE(0x40, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x41, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x42, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x43, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x44, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x45, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x46, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x47, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x48, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x49, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x4A, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x4B, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x4C, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x4D, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x4E, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x4F, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x50, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x51, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x52, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x53, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x54, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x55, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x56, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x57, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x58, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x59, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x5A, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x5B, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x5C, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x5D, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x5E, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x5F, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x60, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x61, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x62, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x63, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x64, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x65, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x66, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x67, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x68, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x69, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x6A, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x6B, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x6C, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x6D, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x6E, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x6F, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x70, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x71, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x72, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x73, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x74, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x75, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x77, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x78, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x79, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x7A, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x7B, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x7C, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x7D, 4, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x7E, 8, LD_4_7__0_F__NO_7__6)
-			OPCODE(0x7F, 4, LD_4_7__0_F__NO_7__6)
-			
-			OPCODE(0x76, 4, HALT_7__6)
-
-			OPCODE(0xA8, 4, XOR_A__8_F)
-			OPCODE(0xA9, 4, XOR_A__8_F)
-			OPCODE(0xAA, 4, XOR_A__8_F)
-			OPCODE(0xAB, 4, XOR_A__8_F)
-			OPCODE(0xAC, 4, XOR_A__8_F)
-			OPCODE(0xAD, 4, XOR_A__8_F)
-			OPCODE(0xAE, 8, XOR_A__8_F)
-			OPCODE(0xAF, 4, XOR_A__8_F)
-
-			OPCODE(0xB0, 4, OR_B__0_7)
-			OPCODE(0xB1, 4, OR_B__0_7)
-			OPCODE(0xB2, 4, OR_B__0_7)
-			OPCODE(0xB3, 4, OR_B__0_7)
-			OPCODE(0xB4, 4, OR_B__0_7)
-			OPCODE(0xB5, 4, OR_B__0_7)
-			OPCODE(0xB6, 8, OR_B__0_7)
-			OPCODE(0xB7, 4, OR_B__0_7)
-
-			case 0xC1: // POP ?
-			case 0xD1:
-			case 0xE1:
-			case 0xF1:
-				{
-					instructionCycles = 12;
-					Uint16 value = 0;
-					//@TODO: refactor with Push? must dissociate the notion of reading and writing from the address itself... like for (HL) in LDs
-					switch ((opcode >> 4) & 0x3)
-					{
-					case 0: BC = Pop16(); break;
-					case 1: DE = Pop16(); break;
-					case 2: HL = Pop16(); break;
-					case 3: AF = Pop16(); break;
-					}
-				}
-				break;
-			
-			case 0xC3: // JP nn
-				{
-					instructionCycles = 12;
-					auto target = Fetch16();
-					PC = target;
-				}
-				break;
-
-			OPCODE(0xC4, 12, CALL_C_D__4__C_D__C)
-			OPCODE(0xD4, 12, CALL_C_D__4__C_D__C)
-			OPCODE(0xCC, 12, CALL_C_D__4__C_D__C)
-			OPCODE(0xDC, 12, CALL_C_D__4__C_D__C)
-
-			case 0xC5: // PUSH ?
-			case 0xD5:
-			case 0xE5:
-			case 0xF5:
-				{
-					instructionCycles = 16;
-					Uint16 value = 0;
-					switch ((opcode >> 4) & 0x3)
-					{
-					case 0: Push16(BC); break;
-					case 1: Push16(DE); break;
-					case 2: Push16(HL); break;
-					case 3: Push16(AF); break;
-					}
-				}
-				break;
-			
-			OPCODE(0xC6, 8, ADD_C_6)
-
-			case 0xC9: // RET
-				{
-					instructionCycles = 8;
-					PC = Pop16();
-				}
-				break;
-			case 0xCB: // Extended opcodes
-				{
-					opcode = Fetch8();
-					switch (opcode)
-					{
-						OPCODE(0x18, 8, RR_CB_1__8_F)
-						OPCODE(0x19, 8, RR_CB_1__8_F)
-						OPCODE(0x1A, 8, RR_CB_1__8_F)
-						OPCODE(0x1B, 8, RR_CB_1__8_F)
-						OPCODE(0x1C, 8, RR_CB_1__8_F)
-						OPCODE(0x1D, 8, RR_CB_1__8_F)
-						OPCODE(0x1E, 12, RR_CB_1__8_F)
-						OPCODE(0x1F, 8, RR_CB_1__8_F)
-
-						OPCODE(0x38, 8, SRL_CB_3__8_F)
-						OPCODE(0x39, 8, SRL_CB_3__8_F)
-						OPCODE(0x3A, 8, SRL_CB_3__8_F)
-						OPCODE(0x3B, 8, SRL_CB_3__8_F)
-						OPCODE(0x3C, 8, SRL_CB_3__8_F)
-						OPCODE(0x3D, 8, SRL_CB_3__8_F)
-						OPCODE(0x3E, 16, SRL_CB_3__8_F)
-						OPCODE(0x3F, 8, SRL_CB_3__8_F)
-					default:
-						{
-							// Back out and let the unknown opcode handler do its job
-							--PC;
-							opcode = 0xCB;
-							unknownOpcode = true;
-						}
-						break;
-					}
-				}
-				break;
-
-			case 0xCD: // CALL nn
-				{
-					instructionCycles = 12;
-					auto address = Fetch16();
-					Call(address);
-				}
-				break;
-
-			OPCODE(0xD6, 8, SUB_D__6)
-
-			OPCODE(0xE6, 8, AND_E__6)
-
-			OPCODE(0xF6, 8, OR_F_6)
-
-			case 0xE0: // LD (0xFF00+n),A
-				{
-					instructionCycles = 12;
-					auto displacement = Fetch8();
-					auto address = displacement + 0xFF00;
-					Write8(address, A);
-				}
-				break;
-			case 0xEA: // LD (nn),A
-				{
-					instructionCycles = 16;
-					auto address = Fetch16();
-					Write8(address, A);
-				}
-				break;
-
-			OPCODE(0xF0, 12, LDH_F__0)
-
-			case 0xF3: // DI
-				{
-					instructionCycles = 4;
-					IME = false;
-				}
-				break;
-
-			OPCODE(0xFA, 16, LD_F__A);
-
-			OPCODE(0xFE, 8, CP_F_E);
-
-			OPCODE(0xD3, 4, IllegalOpcode)
-			OPCODE(0xDB, 4, IllegalOpcode)
-			OPCODE(0xDD, 4, IllegalOpcode)
-			OPCODE(0xE3, 4, IllegalOpcode)
-			OPCODE(0xE4, 4, IllegalOpcode)
-			OPCODE(0xEB, 4, IllegalOpcode)
-			OPCODE(0xEC, 4, IllegalOpcode)
-			OPCODE(0xED, 4, IllegalOpcode)
-			OPCODE(0xF2, 4, IllegalOpcode)
-			OPCODE(0xF4, 4, IllegalOpcode)
-			OPCODE(0xFC, 4, IllegalOpcode)
-			OPCODE(0xFD, 4, IllegalOpcode)
-
-#undef OPCODE
-			default:
-				unknownOpcode = true;
-				break;
+				instructionCycles = ExecuteSingleInstruction();
 			}
-
-			if (unknownOpcode)
+			else
 			{
-				printf("Unknown opcode encountered: 0x%02lX\n", opcode);
-				printf("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC).c_str(), DebugStringPeek16(PC).c_str());
-				SDL_assert(false && "Unknown opcode encountered");
+				// Simply wait until something interesting occurs, depending on the CPU state
+				//@TODO: handle HALT
+				//@TODO: handle STOP
+				instructionCycles = 4;
 			}
 
 			SDL_assert(instructionCycles != -1);
@@ -948,6 +1086,7 @@ private:
 	Uint16 PC;
 	bool IME; // whether interrupts are enabled - very special register, not memory-mapped
 	bool m_cpuHalted;
+	bool m_cpuStopped;
 
 	float m_cyclesRemaining;
 	Uint32 m_totalOpcodesExecuted;

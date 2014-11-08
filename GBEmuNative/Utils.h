@@ -9,9 +9,23 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
+//@TODO: bit manipulation utils
+enum
+{
+	Bit0 = 1 << 0,
+	Bit1 = 1 << 1,
+	Bit2 = 1 << 2,
+	Bit3 = 1 << 3,
+	Bit4 = 1 << 4,
+	Bit5 = 1 << 5,
+	Bit6 = 1 << 6,
+	Bit7 = 1 << 7,
+};
+
 inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
 inline Uint8 GetLow4(Uint8 u8) { return u8 & 0xF; }
 inline Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
+inline Uint16 GetLow12(Uint16 u16) { return u16 & 0xFFF; }
 inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
 
 // WARING: the following functions eat up all events

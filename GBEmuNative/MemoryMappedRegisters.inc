@@ -1,6 +1,11 @@
+DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF01, SB)	// Serial transfer data
+DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF02, SC)	// Serial transfer control
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF04, DIV)	// Divider register
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF07, TAC)	// Timer control
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF0F, IF)	// Interrupt flag
+DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF12, NR12)	// Sound: channel 1 volume envelope
+DEFINE_MEMORY_MAPPED_REGISTER_W (0xFF13, NR13)	// Sound: channel 1 frequency low
+DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF14, NR14)	// Sound: channel 1 frequency high
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF24, NR50)	// Sound: channel control, on/off, volume
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF25, NR51)	// Sound: selection of sound output terminal
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF26, NR52)	// Sound: sound on/off
@@ -11,4 +16,5 @@ DEFINE_MEMORY_MAPPED_REGISTER_R (0xFF44, LY)	// LCDC Y coordinate (current line 
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF47, BGP)	// BG palette data
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF48, OBP0)	// Object palette 0 data
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF49, OBP1)	// Object palette 1 data
+DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF4D, KEY1)	// CGB only: prepare speed switch
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFFFF, IE)	// Interrupt enable
