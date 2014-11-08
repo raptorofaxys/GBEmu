@@ -140,7 +140,6 @@ public:
 
 	///////////////////////////////////////////////////////////////////////////
 	// Opcode implementations
-	//
 	///////////////////////////////////////////////////////////////////////////
 
 	// Function names read like so:
@@ -170,10 +169,22 @@ public:
 		ADD(operand + (GetFlagValue(FlagBitIndex::Carry) ? 1 : 0));
 	}
 
+	void SUB(Uint8 operand)
+	{
+		auto oldValue = A;
+		A = oldValue - operand;
+		SetFlagsForSub(oldValue, operand);
+	}
+
+	void SBC(Uint8 operand)
+	{
+		SUB(operand + (GetFlagValue(FlagBitIndex::Carry) ? 1 : 0));
+	}
+
 	void AND(Uint8 value)
 	{
 		A &= value;
-		SetZeroFromValue(A);
+		SetZeroFlagFromValue(A);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, true);
 		SetFlagValue(FlagBitIndex::Carry, false);
@@ -182,7 +193,7 @@ public:
 	void OR(Uint8 value)
 	{
 		A |= value;
-		SetZeroFromValue(A);
+		SetZeroFlagFromValue(A);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, false);
@@ -191,7 +202,7 @@ public:
 	void XOR(Uint8 value)
 	{
 		A ^= value;
-		SetZeroFromValue(A);
+		SetZeroFlagFromValue(A);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, false);
@@ -200,7 +211,7 @@ public:
 	Uint8 RL(Uint8 oldValue)
 	{
 		Uint8 newValue = (oldValue << 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit0 : 0);
-		SetZeroFromValue(newValue);
+		SetZeroFlagFromValue(newValue);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit7) != 0);
@@ -210,7 +221,7 @@ public:
 	Uint8 RR(Uint8 oldValue)
 	{
 		Uint8 newValue = (oldValue >> 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit7 : 0);
-		SetZeroFromValue(newValue);
+		SetZeroFlagFromValue(newValue);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
@@ -288,14 +299,21 @@ public:
 		SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint32>(oldValue) + operand) > 0xFFFF);
 	}
 
+	template <int N> void LD_0__8()
+	{
+		Write16(Fetch16(), SP);
+	}
+
 	template <int N> void STOP_1__0()
 	{
 		m_cpuStopped = true;
+		printf("CPU STOPped");
 	}
 
 	template <int N> void JR_1__8()
 	{
-		PC += Fetch8();
+		Sint8 displacement = static_cast<Sint8>(Fetch8()); // the offset can be negative here
+		PC += displacement;
 	}
 
 	template <int N> void RR_1__F()
@@ -348,6 +366,7 @@ public:
 		{
 			throw Exception("HALT with IME disabled");
 		}
+		printf("CPU HALTed");
 	}
 
 	template <int N> void XOR_A__8_F()
@@ -368,6 +387,15 @@ public:
 		}
 	}
 
+	template <int N> void JP_C_D__2__C_D__2()
+	{
+		auto address = Fetch16();
+		if (b3_4_NZ_Z_NC_C_Eval<N>())
+		{
+			PC = address;
+		}
+	}
+
 	template <int N> void CALL_C_D__4__C_D__C()
 	{
 		auto address = Fetch16();
@@ -382,6 +410,12 @@ public:
 		ADD(Fetch8());
 	}
 
+	template <int N> void RST_C_F__7__C_F__F()
+	{
+		auto isrAddress = b3_5<N>::Value * 8;
+		Call(isrAddress);
+	}
+
 	template <int N> void RL_CB_1__0_7()
 	{
 		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RL(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>()));
@@ -392,12 +426,23 @@ public:
 		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>()));
 	}
 
+	template <int N> void SWAP_CB_3__0_7()
+	{
+		auto value = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
+		Uint8 newValue = GetHigh4(value) | (GetLow4(value) << 4);
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(value);
+		SetZeroFlagFromValue(value);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, false);
+	}
+
 	template <int N> void SRL_CB_3__8_F()
 	{
 		Uint8 oldValue = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>();
 		Uint8 newValue = oldValue >> 1;
 		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
-		SetZeroFromValue(newValue);
+		SetZeroFlagFromValue(newValue);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
@@ -410,10 +455,18 @@ public:
 
 	template <int N> void SUB_D__6()
 	{
-		auto oldValue = A;
-		auto operand = Fetch8();
-		A = oldValue - operand;
-		SetFlagsForSub(oldValue, operand);
+		SUB(Fetch8());
+	}
+
+	template <int N> void RETI_D__9()
+	{
+		Ret();
+		IME = true;
+	}
+
+	template <int N> void SBC_D__E()
+	{
+		SBC(Fetch8());
 	}
 
 	template <int N> void AND_E__6()
@@ -442,6 +495,11 @@ public:
 		auto displacement = Fetch8();
 		auto address = displacement + 0xFF00;
 		A =	 Read8(address);
+	}
+
+	template <int N> void LD_F__9()
+	{
+		SP = HL;
 	}
 
 	template <int N> void LD_F__A()
@@ -523,6 +581,8 @@ public:
 			
 		OPCODE(0x02, 8, LD_0_1__2)
 		OPCODE(0x12, 8, LD_0_1__2)
+
+		OPCODE(0x08, 20, LD_0__8)
 
 		OPCODE(0x0A, 8, LD_0_1__A)
 		OPCODE(0x1A, 8, LD_0_1__A)
@@ -674,6 +734,11 @@ public:
 		OPCODE(0xB6, 8, OR_B__0_7)
 		OPCODE(0xB7, 4, OR_B__0_7)
 
+		OPCODE(0xC0, 8, RET_C_D__0__C_D__8)
+		OPCODE(0xC8, 8, RET_C_D__0__C_D__8)
+		OPCODE(0xD0, 8, RET_C_D__0__C_D__8)
+		OPCODE(0xD8, 8, RET_C_D__0__C_D__8)
+
 		case 0xC1: // POP ?
 		case 0xD1:
 		case 0xE1:
@@ -691,6 +756,11 @@ public:
 				}
 			}
 			break;
+
+		OPCODE(0xC2, 12, JP_C_D__2__C_D__2)
+		OPCODE(0xCA, 12, JP_C_D__2__C_D__2)
+		OPCODE(0xD2, 12, JP_C_D__2__C_D__2)
+		OPCODE(0xDA, 12, JP_C_D__2__C_D__2)
 			
 		case 0xC3: // JP nn
 			{
@@ -724,6 +794,15 @@ public:
 			
 		OPCODE(0xC6, 8, ADD_C_6)
 
+		OPCODE(0xC7, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xD7, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xE7, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xF7, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xCF, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xDF, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xEF, 32, RST_C_F__7__C_F__F)
+		OPCODE(0xFF, 32, RST_C_F__7__C_F__F)
+
 		case 0xC9: // RET
 			{
 				instructionCycles = 8;
@@ -752,6 +831,15 @@ public:
 					OPCODE(0x1D, 8, RR_CB_1__8_F)
 					OPCODE(0x1E, 12, RR_CB_1__8_F)
 					OPCODE(0x1F, 8, RR_CB_1__8_F)
+
+					OPCODE(0x30, 8, SWAP_CB_3__0_7)
+					OPCODE(0x31, 8, SWAP_CB_3__0_7)
+					OPCODE(0x32, 8, SWAP_CB_3__0_7)
+					OPCODE(0x33, 8, SWAP_CB_3__0_7)
+					OPCODE(0x34, 8, SWAP_CB_3__0_7)
+					OPCODE(0x35, 8, SWAP_CB_3__0_7)
+					OPCODE(0x36, 16, SWAP_CB_3__0_7)
+					OPCODE(0x37, 8, SWAP_CB_3__0_7)
 
 					OPCODE(0x38, 8, SRL_CB_3__8_F)
 					OPCODE(0x39, 8, SRL_CB_3__8_F)
@@ -783,12 +871,11 @@ public:
 
 		OPCODE(0xCE, 8, ADC_C__E)
 
-		OPCODE(0xC0, 8, RET_C_D__0__C_D__8)
-		OPCODE(0xC8, 8, RET_C_D__0__C_D__8)
-		OPCODE(0xD0, 8, RET_C_D__0__C_D__8)
-		OPCODE(0xD8, 8, RET_C_D__0__C_D__8)
-
 		OPCODE(0xD6, 8, SUB_D__6)
+
+		OPCODE(0xD9, 8, RETI_D__9)
+		
+		OPCODE(0xDE, 8, SBC_D__E)
 
 		OPCODE(0xE6, 8, AND_E__6)
 
@@ -823,6 +910,8 @@ public:
 				IME = false;
 			}
 			break;
+
+		OPCODE(0xF9, 8, LD_F__9)
 
 		OPCODE(0xFA, 16, LD_F__A);
 
@@ -974,9 +1063,19 @@ private:
 		return m_pMemory->Read8(address);
 	}
 
+	Uint16 Read16(Uint16 address)
+	{
+		return m_pMemory->Read16(address);
+	}
+
 	void Write8(Uint16 address, Uint8 value)
 	{
 		m_pMemory->Write8(address, value);
+	}
+
+	void Write16(Uint16 address, Uint16 value)
+	{
+		m_pMemory->Write16(address, value);
 	}
 
 	void Push16(Uint16 value)
@@ -1000,7 +1099,7 @@ private:
 	{
 		if (flagMask & FlagBitMask::Zero)
 		{
-			SetZeroFromValue(oldValue + operand);
+			SetZeroFlagFromValue(oldValue + operand);
 		}
 
 		if (flagMask & FlagBitMask::Subtract)
@@ -1023,7 +1122,7 @@ private:
 	{
 		if (flagMask & FlagBitMask::Zero)
 		{
-			SetZeroFromValue(oldValue - operand);
+			SetZeroFlagFromValue(oldValue - operand);
 		}
 
 		if (flagMask & FlagBitMask::Subtract)
@@ -1042,7 +1141,7 @@ private:
 		}
 	}
 
-	void SetZeroFromValue(Uint8 value)
+	void SetZeroFlagFromValue(Uint8 value)
 	{
 		SetFlagValue(FlagBitIndex::Zero, value == 0);
 	}

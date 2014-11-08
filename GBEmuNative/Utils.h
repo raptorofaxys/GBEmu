@@ -22,11 +22,14 @@ enum
 	Bit7 = 1 << 7,
 };
 
-inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
 inline Uint8 GetLow4(Uint8 u8) { return u8 & 0xF; }
+inline Uint8 GetHigh4(Uint8 u8) { return (u8 >> 4) & 0xF; }
+
 inline Uint8 GetLow8(Uint16 u16) { return u16 & 0xFF; }
 inline Uint16 GetLow12(Uint16 u16) { return u16 & 0xFFF; }
 inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
+
+inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
 
 // WARING: the following functions eat up all events
 SDL_Keycode DebugCheckForKeypress();

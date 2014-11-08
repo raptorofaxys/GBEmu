@@ -187,7 +187,8 @@ private:
 				//@TODO: timing emulation
 				if (value & Bit7)
 				{
-					printf("Serial output byte: %c (0x%02lX)\n", m_SB, m_SB);
+					//printf("Serial output byte: %c (0x%02lX)\n", m_SB, m_SB);
+					printf("%c", m_SB);
 					m_SC &= ~Bit7;
 					// Read zeroes
 					m_SB = 0;
