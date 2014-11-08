@@ -31,9 +31,16 @@ class Cpu
 public:
 	static Uint32 const kCyclesPerSecond = 4194304;
 
+	enum class DebuggerState
+	{
+		Running,
+		SingleStepping
+	};
+
 	Cpu(const std::shared_ptr<Memory>& memory)
 		: m_pMemory(memory)
 	{
+		m_debuggerState = DebuggerState::SingleStepping;
 		Reset();
 	}
 
@@ -60,13 +67,19 @@ public:
 #define VERIFY_OPCODE() SDL_TriggerBreakpoint()
 //#define VERIFY_OPCODE()
 	
+	///////////////////////////////////////////////////////////////////////////
 	// Bit parsing template metafunctions
+	///////////////////////////////////////////////////////////////////////////
 
 	template <int N> struct b0_2 { enum { Value = N & 0x7 }; };
 	template <int N> struct b3_4 { enum { Value = (N >> 3) & 0x3 }; };
 	template <int N> struct b3_5 { enum { Value = (N >> 3) & 0x7 }; };
 	template <int N> struct b4 { enum { Value = (N >> 4) & 0x1 }; };
 	template <int N> struct b4_5 { enum { Value = (N >> 4) & 0x3 }; };
+
+	///////////////////////////////////////////////////////////////////////////
+	// Micro-opcode implementations
+	///////////////////////////////////////////////////////////////////////////
 
 	// This reads: parse bits 0 to 2, select from B, C, D, E, H, L, indirect HL, A
 	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8_Impl();
@@ -117,12 +130,40 @@ public:
 	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<1>() { return DE; }
 	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<2>() { return HL; }
 	template <> Uint16& b4_5_BC_DE_HL_SP_GetReg16<3>() { return SP; }
-	//template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16_Impl() { return b4_5_BC_DE_HL_SP_GetReg16<N>(); }
-	//template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16() { return b4_5_BC_DE_HL_SP_Read16_Impl<b4_5<N>::Value>(); }
+	template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16_Impl() { return b4_5_BC_DE_HL_SP_GetReg16<N>(); }
+	template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16() { return b4_5_BC_DE_HL_SP_Read16_Impl<b4_5<N>::Value>(); }
 	template <int N> void b4_5_BC_DE_HL_SP_Write16_Impl(Uint16 value) { b4_5_BC_DE_HL_SP_GetReg16<N>() = value; }
 	template <int N> void b4_5_BC_DE_HL_SP_Write16(Uint16 value) { b4_5_BC_DE_HL_SP_Write16_Impl<b4_5<N>::Value>(value); }
 
+	///////////////////////////////////////////////////////////////////////////
 	// Opcode implementations
+	//
+	///////////////////////////////////////////////////////////////////////////
+
+	// Function names read like so:
+	// template <int N> void INC_0_3__4__0_3__C()
+	// That means:
+	// Instruction INC, from high nibble 0 to high nibble 3, low nibble 4 (i.e. 0x04, 0x14, 0x24, 0x34); also from high nibble 0 to high nibble 3, low nibble C (i.e. 0x0C, 0x1C, 0x2C, 0x3C)
+	//
+	// The block in the update loop that invokes the above looks like this, forwarding all the opcodes to the same handler:
+	//	OPCODE(0x04, 4, INC_0_3__4__0_3__C)
+	//	OPCODE(0x0C, 4, INC_0_3__4__0_3__C)
+	//	OPCODE(0x14, 4, INC_0_3__4__0_3__C)
+	//	OPCODE(0x1C, 4, INC_0_3__4__0_3__C)
+	//	OPCODE(0x24, 4, INC_0_3__4__0_3__C)
+	//	OPCODE(0x2C, 4, INC_0_3__4__0_3__C)
+	//	OPCODE(0x34, 8, INC_0_3__4__0_3__C)
+	//	OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
+
+	void OR(Uint8 value)
+	{
+		A |= value;
+		SetZeroFromValue(A);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, false);
+	}
+
 	template <int N> void NOP()
 	{
 	}
@@ -138,9 +179,35 @@ public:
 		b4_5_BC_DE_HL_SP_Write16<N>(Fetch16());
 	}
 
+	template <int N> void INC_0_3__3()
+	{
+		b4_5_BC_DE_HL_SP_Write16<N>(b4_5_BC_DE_HL_SP_Read16<N>() + 1);
+	}
+
+	template <int N> void INC_0_3__4__0_3__C()
+	{
+		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
+		auto newValue = oldValue + 1;
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetFlagsForAdd(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
+	}
+
+	template <int N> void DEC_0_3__5__0_3__D()
+	{
+		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
+		auto newValue = oldValue - 1;
+		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetFlagsForSub(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
+	}
+
 	template <int N> void LD_0_3__6__0_3__E()
 	{
 		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(Fetch8());
+	}
+
+	template <int N> void DEC_0_3__B()
+	{
+		b4_5_BC_DE_HL_SP_Write16<N>(b4_5_BC_DE_HL_SP_Read16<N>() - 1);
 	}
 
 	template <int N> void JR_18()
@@ -148,6 +215,12 @@ public:
 		PC += Fetch8();
 	}
 
+	template <int N> void LDI_2_2()
+	{
+		Write8(HL, A);
+		++HL;
+	}
+	
 	template <int N> void JR_2_3__0__2_3__8()
 	{
 		auto offset = Fetch8();
@@ -157,22 +230,16 @@ public:
 		}
 	}
 
-	template <int N> void LDI_2_2()
-	{
-		Write8(HL, A);
-		++HL;
-	}
-	
-	template <int N> void LDD_3_2()
-	{
-		Write8(HL, A);
-		--HL;
-	}
-	
 	template <int N> void LDI_2_A()
 	{
 		A = Read8(HL);
 		++HL;
+	}
+
+	template <int N> void LDD_3_2()
+	{
+		Write8(HL, A);
+		--HL;
 	}
 
 	template <int N> void LDD_3_A()
@@ -181,84 +248,6 @@ public:
 		--HL;
 	}
 
-	void SetFlagsForAdd(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
-	{
-		if (flagMask & FlagBitMask::Zero)
-		{
-			SetZeroFromValue(A);
-		}
-
-		if (flagMask & FlagBitMask::Subtract)
-		{
-			SetFlagValue(FlagBitIndex::Subtract, false);
-		}
-
-		if (flagMask & FlagBitMask::HalfCarry)
-		{
-			SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand)) > 0xF);
-		}
-
-		if (flagMask & FlagBitMask::Carry)
-		{
-			SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand) > 0xFF);
-		}
-	}
-
-	void SetFlagsForSub(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
-	{
-		if (flagMask & FlagBitMask::Zero)
-		{
-			SetZeroFromValue(A);
-		}
-
-		if (flagMask & FlagBitMask::Subtract)
-		{
-			SetFlagValue(FlagBitIndex::Subtract, true);
-		}
-
-		if (flagMask & FlagBitMask::HalfCarry)
-		{
-			SetFlagValue(FlagBitIndex::HalfCarry, static_cast<Uint16>(GetLow4(oldValue)) >= GetLow4(operand));
-		}
-
-		if (flagMask & FlagBitMask::Carry)
-		{
-			SetFlagValue(FlagBitIndex::Carry, static_cast<Uint16>(oldValue) >= operand);
-		}
-	}
-
-	template <int N> void DEC_0_3__5__0_3__D()
-	{
-		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
-		auto newValue = oldValue - 1;
-		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
-		SetFlagsForSub(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
-		//SetZeroFromValue(newValue);
-		//SetFlagValue(FlagBitIndex::Subtract, true);
-		//SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(oldValue) > 0); // Flaky docs
-	}
-
-	template <int N> void INC_0_3__4__0_3__C()
-	{
-		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
-		auto newValue = oldValue + 1;
-		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
-		SetFlagsForAdd(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
-		//SetZeroFromValue(newValue);
-		//SetFlagValue(FlagBitIndex::Subtract, false);
-		//SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(oldValue) == 0xF); // Flaky docs
-	}
-
-	void OR(Uint8 value)
-	{
-		A |= value;
-		SetZeroFromValue(A);
-		SetFlagValue(FlagBitIndex::Subtract, false);
-		SetFlagValue(FlagBitIndex::HalfCarry, false);
-		SetFlagValue(FlagBitIndex::Carry, false);
-	}
-
-	// This reads: OR opcode, starting with 0xBn, with lower nibble values 0-7
 	template <int N> void OR_B__0_7()
 	{
 		OR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
@@ -270,13 +259,8 @@ public:
 		auto operand = Fetch8();
 		A = oldValue + operand;
 		SetFlagsForAdd(oldValue, operand);
-		//SetZeroFromValue(A);
-		//SetFlagValue(FlagBitIndex::Subtract, false);
-		//SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand)) > 0xF);
-		//SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand) > 0xFF);
 	}
 	
-	// OR opcode F6
 	template <int N> void OR_F_6()
 	{
 		OR(Fetch8());
@@ -297,7 +281,9 @@ public:
 		m_cpuHalted = true;
 	}
 	
-	// End opcode implementations
+	///////////////////////////////////////////////////////////////////////////
+	// CPU Emulation
+	///////////////////////////////////////////////////////////////////////////
 
 	void DebugOpcode(Uint8 opcode)
 	{
@@ -331,9 +317,9 @@ public:
 			GetFlagValue(FlagBitIndex::Carry) ? "C" : "c", 
 			B, C, D, E, H, L);
 		printf("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0);
-		printf("n: 0x%s nn: 0x%s\n", DebugPeek8(PC + 1).c_str(), DebugPeek16(PC + 1).c_str());
-		//printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugPeek8(BC), DebugPeek8(DE), DebugPeek8(HL), DebugPeek16(Peek16(PC + 1)));
-		printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugPeek8(BC).c_str(), DebugPeek8(DE).c_str(), DebugPeek8(HL).c_str());
+		printf("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str());
+		//printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(PC + 1)));
+		printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str());
 	}
 
 	void Update(float seconds)
@@ -367,15 +353,19 @@ public:
 			switch (opcode)
 			{
 			OPCODE(0x00, 4, NOP)
+			
+			OPCODE(0x0A, 8, LD_0_1__A)
+			OPCODE(0x1A, 8, LD_0_1__A)
 
-			OPCODE(0x05, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x0D, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x15, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x1D, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x25, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x2D, 4, DEC_0_3__5__0_3__D)
-			OPCODE(0x35, 8, DEC_0_3__5__0_3__D)
-			OPCODE(0x3D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x01, 12, LD_0_3__1)
+			OPCODE(0x11, 12, LD_0_3__1)
+			OPCODE(0x21, 12, LD_0_3__1)
+			OPCODE(0x31, 12, LD_0_3__1)
+
+			OPCODE(0x03, 8, INC_0_3__3)
+			OPCODE(0x13, 8, INC_0_3__3)
+			OPCODE(0x23, 8, INC_0_3__3)
+			OPCODE(0x33, 8, INC_0_3__3)
 
 			OPCODE(0x04, 4, INC_0_3__4__0_3__C)
 			OPCODE(0x0C, 4, INC_0_3__4__0_3__C)
@@ -386,12 +376,14 @@ public:
 			OPCODE(0x34, 8, INC_0_3__4__0_3__C)
 			OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
 
-			OPCODE(0x18, 8, JR_18)
-			
-			OPCODE(0x01, 12, LD_0_3__1)
-			OPCODE(0x11, 12, LD_0_3__1)
-			OPCODE(0x21, 12, LD_0_3__1)
-			OPCODE(0x31, 12, LD_0_3__1)
+			OPCODE(0x05, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x0D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x15, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x1D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x25, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x2D, 4, DEC_0_3__5__0_3__D)
+			OPCODE(0x35, 8, DEC_0_3__5__0_3__D)
+			OPCODE(0x3D, 4, DEC_0_3__5__0_3__D)
 
 			OPCODE(0x06, 8, LD_0_3__6__0_3__E)
 			OPCODE(0x0E, 8, LD_0_3__6__0_3__E)
@@ -402,51 +394,22 @@ public:
 			OPCODE(0x36, 12, LD_0_3__6__0_3__E)
 			OPCODE(0x3E, 8, LD_0_3__6__0_3__E)
 			
-			OPCODE(0x0A, 8, LD_0_1__A)
-			OPCODE(0x1A, 8, LD_0_1__A)
+			OPCODE(0x0B, 8, DEC_0_3__B)
+			OPCODE(0x1B, 8, DEC_0_3__B)
+			OPCODE(0x2B, 8, DEC_0_3__B)
+			OPCODE(0x3B, 8, DEC_0_3__B)
 
-			OPCODE(0x20, 8, JR_2_3__0__2_3__8)
-			OPCODE(0x28, 8, JR_2_3__0__2_3__8)
-			OPCODE(0x30, 8, JR_2_3__0__2_3__8)
-			OPCODE(0x38, 8, JR_2_3__0__2_3__8)
-			
+			OPCODE(0x18, 8, JR_18)
+
 			OPCODE(0x22, 8, LDI_2_2)
 			OPCODE(0x32, 8, LDD_3_2)
 			OPCODE(0x2A, 8, LDI_2_A)
 			OPCODE(0x3A, 8, LDD_3_A)
 
-			case 0x03: // INC ?
-			case 0x13:
-			case 0x23:
-			case 0x33:
-				{
-					instructionCycles = 8;
-					//@TODO: refactor with DEC 0x0B, LD 0x01, etc.?
-					switch ((opcode >> 4) & 0x3)
-					{
-					case 0: ++BC; break;
-					case 1: ++DE; break;
-					case 2: ++HL; break;
-					case 3: ++SP; break;
-					}
-				}
-				break;
-
-			case 0x0B: // DEC ?
-			case 0x1B:
-			case 0x2B:
-			case 0x3B:
-				{
-					instructionCycles = 8;
-					switch ((opcode >> 4) & 0x3)
-					{
-					case 0: --BC; break;
-					case 1: --DE; break;
-					case 2: --HL; break;
-					case 3: --SP; break;
-					}
-				}
-				break;
+			OPCODE(0x20, 8, JR_2_3__0__2_3__8)
+			OPCODE(0x28, 8, JR_2_3__0__2_3__8)
+			OPCODE(0x30, 8, JR_2_3__0__2_3__8)
+			OPCODE(0x38, 8, JR_2_3__0__2_3__8)
 
 				// LD A,?
 			case 0x40:
@@ -659,12 +622,24 @@ public:
 			m_cyclesRemaining -= instructionCycles;
 			++m_totalOpcodesExecuted;
 
-			WaitForKeypress();
+			if (m_debuggerState == DebuggerState::SingleStepping)
+			{
+				auto keycode = WaitForKeypress();
+				switch (keycode)
+				{
+				case SDLK_g: m_debuggerState = DebuggerState::Running; break;
+				case SDLK_s: m_debuggerState = DebuggerState::SingleStepping; break;
+				}
+			}
 		}
 	}
 
 private:
-	std::string DebugPeek8(Uint16 address)
+	///////////////////////////////////////////////////////////////////////////
+	// Memory access
+	///////////////////////////////////////////////////////////////////////////
+
+	std::string DebugStringPeek8(Uint16 address)
 	{
 		Uint8 value = 0;
 		bool success = m_pMemory->SafeRead8(address, value);
@@ -673,9 +648,9 @@ private:
 		return success ? szBuffer : "??";
 	}
 	
-	std::string DebugPeek16(Uint16 address)
+	std::string DebugStringPeek16(Uint16 address)
 	{
-		return DebugPeek8(address + 1).append(DebugPeek8(address));
+		return DebugStringPeek8(address + 1).append(DebugStringPeek8(address));
 	}
 
 	Uint8 Peek8()
@@ -735,6 +710,56 @@ private:
 		return result;
 	}
 
+	///////////////////////////////////////////////////////////////////////////
+	// Flags
+	///////////////////////////////////////////////////////////////////////////
+
+	void SetFlagsForAdd(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
+	{
+		if (flagMask & FlagBitMask::Zero)
+		{
+			SetZeroFromValue(A);
+		}
+
+		if (flagMask & FlagBitMask::Subtract)
+		{
+			SetFlagValue(FlagBitIndex::Subtract, false);
+		}
+
+		if (flagMask & FlagBitMask::HalfCarry)
+		{
+			SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand)) > 0xF);
+		}
+
+		if (flagMask & FlagBitMask::Carry)
+		{
+			SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand) > 0xFF);
+		}
+	}
+
+	void SetFlagsForSub(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
+	{
+		if (flagMask & FlagBitMask::Zero)
+		{
+			SetZeroFromValue(A);
+		}
+
+		if (flagMask & FlagBitMask::Subtract)
+		{
+			SetFlagValue(FlagBitIndex::Subtract, true);
+		}
+
+		if (flagMask & FlagBitMask::HalfCarry)
+		{
+			SetFlagValue(FlagBitIndex::HalfCarry, static_cast<Uint16>(GetLow4(oldValue)) >= GetLow4(operand));
+		}
+
+		if (flagMask & FlagBitMask::Carry)
+		{
+			SetFlagValue(FlagBitIndex::Carry, static_cast<Uint16>(oldValue) >= operand);
+		}
+	}
+
 	void SetZeroFromValue(Uint8 value)
 	{
 		SetFlagValue(FlagBitIndex::Zero, value == 0);
@@ -750,6 +775,10 @@ private:
 	{
 		return (F & (1 << static_cast<Uint8>(position))) != 0;
 	}
+
+	///////////////////////////////////////////////////////////////////////////
+	// CPU State members
+	///////////////////////////////////////////////////////////////////////////
 
 	// This macro helps define register pairs that have alternate views.  For example, B and C can be indexed individually as 8-bit registers, but they can also be indexed together as a 16-bit register called BC. 
 	// A static_assert helps make sure the machine endianness behaves as expected.
@@ -778,6 +807,8 @@ private:
 
 	float m_cyclesRemaining;
 	Uint32 m_totalOpcodesExecuted;
+
+	DebuggerState m_debuggerState;
 
 	std::shared_ptr<Memory> m_pMemory;
 };
