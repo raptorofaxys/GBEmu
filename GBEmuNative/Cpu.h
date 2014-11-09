@@ -31,23 +31,16 @@ class Cpu
 public:
 	static Uint32 const kCyclesPerSecond = 4194304;
 
-	enum class DebuggerState
-	{
-		Running,
-		SingleStepping
-	};
-
 	Cpu(const std::shared_ptr<Memory>& memory)
 		: m_pMemory(memory)
 	{
-		m_debuggerState = DebuggerState::Running;
 		Reset();
 	}
 
 	void Reset()
 	{
-		m_cyclesRemaining = 0.0f;
 		m_totalOpcodesExecuted = 0;
+		m_traceEnabled = false;
 
 		m_cpuHalted = false;
 		m_cpuStopped = false;
@@ -65,6 +58,26 @@ public:
 		//Write8(Memory::MemoryMappedRegisters::TIMA, 0);
 	}
 
+	Sint32 ExecuteSingleInstruction()
+	{
+		Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
+		if (!m_cpuHalted && !m_cpuStopped)
+		{
+			instructionCycles = DoExecuteSingleInstruction();
+		}
+		else
+		{
+			// Simply wait until something interesting occurs, depending on the CPU state
+			//@TODO: handle HALT
+			//@TODO: handle STOP
+			instructionCycles = 4;
+		}
+
+		SDL_assert(instructionCycles != -1);
+		return instructionCycles;
+	}
+
+private:
 #define VERIFY_OPCODE() SDL_TriggerBreakpoint()
 //#define VERIFY_OPCODE()
 	
@@ -609,7 +622,7 @@ public:
 
 	void DebugOpcode(Uint8 opcode)
 	{
-		if (m_debuggerState == DebuggerState::SingleStepping)
+		if (m_traceEnabled)
 		{
 			static const char* opcodeMnemonics[256] =
 			{
@@ -647,8 +660,26 @@ public:
 		}
 	}
 
-	Uint16 ExecuteSingleInstruction()
+	Uint16 DoExecuteSingleInstruction()
 	{
+		// We have a few options for implementing opcode lookup and execution.  My goals are:
+		// -first, to have fun with C++
+		// -next, to avoid repetition, thus factoring as much as possible
+		// -lastly, to generate relatively good code if that doesn't mean intefering with the previous two goals
+		//
+		// I do care about readability and maintainability, but this is a weekend exercise with no other developers, and I don't mind winding up with something a bit abstruse if it means the above goals are met.
+		// 
+		// With the above in mind, the brute force implementation approach holds relatively little interest.  What I would like to do is to capture the underlying PLA-like structure of the hardware, where multiplexing
+		// circuitry is reused between different opcodes.  Many things are computed in parallel in the hardware, and the microcode of each opcode acts as a sequencer of sorts, picking and choosing which
+		// outputs get routed to which inputs, and so on.
+		// 
+		// Each sub-circuit could be represented by a small function, and read/write access could be routed through virtual functions.  This would be slow and relatively mundane.  Instead of the double indirection
+		// of virtual functions, we could simply use std::function (or raw function pointers), but that still means runtime branching.
+		// What's interesting is that the opcode case expression is constant, which means we could use template logic to get the compiler to generate the appropriate code for each individual opcode based on the case expression.
+		// This requires a case label per opcode, but it generates debuggable code in debug targets and very efficient code in release.  (Many LD variants compile to two MOV instructions.)
+
+		DebugOpcode(Peek8());
+
 		Uint8 opcode = Fetch8();
 		bool unknownOpcode = false;
 
@@ -1038,68 +1069,10 @@ public:
 			SDL_assert(false && "Unknown opcode encountered");
 		}
 
+		++m_totalOpcodesExecuted;
+
 		return instructionCycles;
 	}
-
-	void Update(float seconds)
-	{
-		m_cyclesRemaining += seconds * kCyclesPerSecond;
-
-		// We have a few options for implementing opcode lookup and execution.  My goals are:
-		// -first, to have fun with C++
-		// -next, to avoid repetition, thus factoring as much as possible
-		// -lastly, to generate relatively good code if that doesn't mean intefering with the previous two goals
-		//
-		// I do care about readability and maintainability, but this is a weekend exercise with no other developers, and I don't mind winding up with something a bit abstruse if it means the above goals are met.
-		// 
-		// With the above in mind, the brute force implementation approach holds relatively little interest.  What I would like to do is to capture the underlying PLA-like structure of the hardware, where multiplexing
-		// circuitry is reused between different opcodes.  Many things are computed in parallel in the hardware, and the microcode of each opcode acts as a sequencer of sorts, picking and choosing which
-		// outputs get routed to which inputs, and so on.
-		// 
-		// Each sub-circuit could be represented by a small function, and read/write access could be routed through virtual functions.  This would be slow and relatively mundane.  Instead of the double indirection
-		// of virtual functions, we could simply use std::function (or raw function pointers), but that still means runtime branching.
-		// What's interesting is that the opcode case expression is constant, which means we could use template logic to get the compiler to generate the appropriate code for each individual opcode based on the case expression.
-		// This requires a case label per opcode, but it generates debuggable code in debug targets and very efficient code in release.  (Many LD variants compile to two MOV instructions.)
-		
-		while (m_cyclesRemaining > 0)
-		{
-			DebugOpcode(Peek8());
-
-			SDL_Keycode keycode = SDLK_UNKNOWN;
-			if (m_debuggerState == DebuggerState::SingleStepping)
-			{
-				keycode = DebugWaitForKeypress();
-			}
-			else
-			{
-				keycode = DebugCheckForKeypress();
-			}
-
-			switch (keycode)
-			{
-			case SDLK_g: m_debuggerState = DebuggerState::Running; break;
-			case SDLK_s: m_debuggerState = DebuggerState::SingleStepping; break;
-			}
-
-			Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
-			if (!m_cpuHalted && !m_cpuStopped)
-			{
-				instructionCycles = ExecuteSingleInstruction();
-			}
-			else
-			{
-				// Simply wait until something interesting occurs, depending on the CPU state
-				//@TODO: handle HALT
-				//@TODO: handle STOP
-				instructionCycles = 4;
-			}
-
-			SDL_assert(instructionCycles != -1);
-			m_cyclesRemaining -= instructionCycles;
-			++m_totalOpcodesExecuted;
-		}
-	}
-
 private:
 	///////////////////////////////////////////////////////////////////////////
 	// Memory access
@@ -1289,10 +1262,8 @@ private:
 	bool m_cpuHalted;
 	bool m_cpuStopped;
 
-	float m_cyclesRemaining;
 	Uint32 m_totalOpcodesExecuted;
-
-	DebuggerState m_debuggerState;
+	bool m_traceEnabled;
 
 	std::shared_ptr<Memory> m_pMemory;
 };
