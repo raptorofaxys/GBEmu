@@ -303,9 +303,7 @@ public:
 		auto oldValue = HL;
 		auto operand = b4_5_BC_DE_HL_SP_Read16<N>();
 		HL += operand;
-		SetFlagValue(FlagBitIndex::Subtract, false);
-		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint32>(GetLow12(oldValue)) + GetLow12(operand)) > 0xFFF);
-		SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint32>(oldValue) + operand) > 0xFFFF);
+		SetFlagsForAdd16(oldValue, operand);
 	}
 
 	template <int N> void LD_0__8()
@@ -566,6 +564,19 @@ public:
 		A =	 Read8(address);
 	}
 
+	template <int N> void DI_F__3()
+	{
+		IME = false;
+	}
+
+	template <int N> void LDHL_F__8()
+	{
+		auto oldValue = SP;
+		Sint8 displacement = Fetch8();
+		HL = SP + displacement;
+		SetFlagsForAdd16(oldValue, displacement);
+	}
+
 	template <int N> void LD_F__9()
 	{
 		SP = HL;
@@ -575,6 +586,11 @@ public:
 	{
 		auto address = Fetch16();
 		A = Read8(address);
+	}
+
+	template <int N> void EI_F__B()
+	{
+		IME = true;
 	}
 
 	template <int N> void CP_F_E()
@@ -981,16 +997,15 @@ public:
 
 		OPCODE(0xF0, 12, LDH_F__0)
 
-		case 0xF3: // DI
-			{
-				instructionCycles = 4;
-				IME = false;
-			}
-			break;
+		OPCODE(0xF3, 4, DI_F__3)
+		
+		OPCODE(0xF8, 12, LDHL_F__8)
 
 		OPCODE(0xF9, 8, LD_F__9)
 
 		OPCODE(0xFA, 16, LD_F__A);
+		
+		OPCODE(0xFB, 4, EI_F__B)
 
 		OPCODE(0xFE, 8, CP_F_E);
 
@@ -1219,6 +1234,13 @@ private:
 		{
 			SetFlagValue(FlagBitIndex::Carry, static_cast<Uint16>(oldValue) >= operand);
 		}
+	}
+
+	void SetFlagsForAdd16(Uint16 oldValue, Uint16 operand)
+	{
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint32>(GetLow12(oldValue)) + GetLow12(operand)) > 0xFFF);
+		SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint32>(oldValue) + operand) > 0xFFFF);
 	}
 
 	void SetZeroFlagFromValue(Uint8 value)
