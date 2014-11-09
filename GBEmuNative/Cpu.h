@@ -228,6 +228,15 @@ public:
 		return newValue;
 	}
 
+	void CP(Uint8 operand)
+	{
+		SetFlagValue(FlagBitIndex::Zero, A == operand);
+		SetFlagValue(FlagBitIndex::Subtract, true);
+		// Note: documentation is flaky here; to verify
+		SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(A) < GetLow4(operand));
+		SetFlagValue(FlagBitIndex::Carry, A < operand);
+	}
+
 	void Call(Uint16 address)
 	{
 		Push16(PC);
@@ -321,12 +330,6 @@ public:
 		A = RR(A);
 	}
 
-	template <int N> void LDI_2__2()
-	{
-		Write8(HL, A);
-		++HL;
-	}
-	
 	template <int N> void JR_2_3__0__2_3__8()
 	{
 		Sint8 displacement = static_cast<Sint8>(Fetch8()); // the offset can be negative here
@@ -336,6 +339,12 @@ public:
 		}
 	}
 
+	template <int N> void LDI_2__2()
+	{
+		Write8(HL, A);
+		++HL;
+	}
+	
 	template <int N> void LDI_2__A()
 	{
 		A = Read8(HL);
@@ -352,6 +361,61 @@ public:
 	{
 		A = Read8(HL);
 		--HL;
+	}
+
+	template <int N> void DAA_2__7()
+	{
+		// Algorithm adapted from DKParrot's post on http://ngemu.com/threads/little-help-with-my-gameboy-emulator.143814/
+		// Seems to be relatively little documentation regarding this peculiar opcode other than other emulators' source.
+		// Since getting this right with all the edge cases from first principles looks like an exercise in pedanticism
+		// and the implementation of this specific opcode is not of particular interest to me, I chose to adapt an existing
+		// implementation and move on with my life.
+		Sint32 value = A;
+
+        if (!GetFlagValue(FlagBitIndex::Subtract))
+        {
+            if (GetFlagValue(FlagBitIndex::HalfCarry) || ((value & 0xF) > 9))
+			{
+                value += 0x06;
+			}
+
+            if (GetFlagValue(FlagBitIndex::Carry) || (value > 0x9F))
+			{
+                value += 0x60;
+			}
+        }
+        else
+        {
+            if (GetFlagValue(FlagBitIndex::HalfCarry))
+			{
+                value = (value - 6) & 0xFF;
+			}
+
+            if (GetFlagValue(FlagBitIndex::Carry))
+			{
+                value -= 0x60;
+			}
+        }
+
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+
+		// Very strange behaviour on the carry flag - if there is a carry, it is set, otherwise it is untouched.
+		// Not sure this is truly how it behaves on a real DMG.
+		if (value & 0x100)
+		{
+			SetFlagValue(FlagBitIndex::Carry, true);
+		}
+		//SetFlagValue(FlagBitIndex::Carry, (value & 0x100) != 0);
+
+		A = static_cast<Uint8>(value);
+		SetZeroFlagFromValue(A);
+	}
+
+	template <int N> void CPL_2__F()
+	{
+		A = ~A;
+		SetFlagValue(FlagBitIndex::Subtract, true);
+		SetFlagValue(FlagBitIndex::HalfCarry, true);
 	}
 
 	template <int N> void LD_4_7__0_F__NO_7__6()
@@ -377,6 +441,11 @@ public:
 	template <int N> void OR_B__0_7()
 	{
 		OR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+
+	template <int N> void CP_B__8_F()
+	{
+		CP(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
 	}
 
 	template <int N> void RET_C_D__0__C_D__8()
@@ -510,12 +579,7 @@ public:
 
 	template <int N> void CP_F_E()
 	{
-		auto operand = Fetch8();
-		SetFlagValue(FlagBitIndex::Zero, A == operand);
-		SetFlagValue(FlagBitIndex::Subtract, true);
-		// Note: documentation is flaky here; to verify
-		SetFlagValue(FlagBitIndex::HalfCarry, GetLow4(A) < GetLow4(operand));
-		SetFlagValue(FlagBitIndex::Carry, A < operand);
+		CP(Fetch8());
 	}
 
 	template <int N> void IllegalOpcode()
@@ -640,15 +704,19 @@ public:
 
 		OPCODE(0x1F, 4, RR_1__F)
 
+		OPCODE(0x20, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x28, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x30, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x38, 8, JR_2_3__0__2_3__8)
+
 		OPCODE(0x22, 8, LDI_2__2)
 		OPCODE(0x32, 8, LDD_3__2)
 		OPCODE(0x2A, 8, LDI_2__A)
 		OPCODE(0x3A, 8, LDD_3__A)
 
-		OPCODE(0x20, 8, JR_2_3__0__2_3__8)
-		OPCODE(0x28, 8, JR_2_3__0__2_3__8)
-		OPCODE(0x30, 8, JR_2_3__0__2_3__8)
-		OPCODE(0x38, 8, JR_2_3__0__2_3__8)
+		OPCODE(0x27, 4, DAA_2__7)
+
+		OPCODE(0x2F, 4, CPL_2__F)
 
 		OPCODE(0x40, 4, LD_4_7__0_F__NO_7__6)
 		OPCODE(0x41, 4, LD_4_7__0_F__NO_7__6)
@@ -733,6 +801,15 @@ public:
 		OPCODE(0xB5, 4, OR_B__0_7)
 		OPCODE(0xB6, 8, OR_B__0_7)
 		OPCODE(0xB7, 4, OR_B__0_7)
+		
+		OPCODE(0xB8, 4, CP_B__8_F)
+		OPCODE(0xB9, 4, CP_B__8_F)
+		OPCODE(0xBA, 4, CP_B__8_F)
+		OPCODE(0xBB, 4, CP_B__8_F)
+		OPCODE(0xBC, 4, CP_B__8_F)
+		OPCODE(0xBD, 4, CP_B__8_F)
+		OPCODE(0xBE, 8, CP_B__8_F)
+		OPCODE(0xBF, 4, CP_B__8_F)
 
 		OPCODE(0xC0, 8, RET_C_D__0__C_D__8)
 		OPCODE(0xC8, 8, RET_C_D__0__C_D__8)
@@ -935,6 +1012,9 @@ public:
 			unknownOpcode = true;
 			break;
 		}
+
+		// Lower four bits of F are ALWAYS zero
+		F &= 0xF0;
 
 		if (unknownOpcode)
 		{

@@ -60,9 +60,9 @@ int main(int argc, char **argv)
 		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb");
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
 		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
-		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
+		GameBoy gb("cpu_instrs\\individual\\01-special.gb");
 		//GameBoy gb("cpu_instrs\\individual\\04-op r,imm.gb");
-		GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
+		//GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
 		//GameBoy gb("cpu_instrs\\individual\\06-ld r,r.gb");
 		//GameBoy gb("cpu_instrs\\individual\\07-jr,jp,call,ret,rst.gb");
 		//GameBoy gb("cpu_instrs\\individual\\09-op r,r.gb");
