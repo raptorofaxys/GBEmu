@@ -93,6 +93,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Cpu.h" />
+    <ClInclude Include="GameBoy.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Rom.h" />
     <ClInclude Include="Utils.h" />
