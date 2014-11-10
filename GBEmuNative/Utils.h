@@ -101,6 +101,13 @@ struct Janitor
 	FuncType m_func;
 };
 
+
+
+inline void SetForegroundConsoleColor()
+{
+	printf("\033[31;42m");
+}
+
 class ProcessConsole
 {
 public:

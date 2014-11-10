@@ -8,6 +8,20 @@
 
 //class Mapper
 
+#define MMR_NAME(x) x
+
+// Define memory addresses for all the memory-mapped registers
+enum class MemoryMappedRegisters
+{
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) name = addx,
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) name = addx,
+#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) name = addx,
+#include "MemoryMappedRegisters.inc"
+#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
+#undef DEFINE_MEMORY_MAPPED_REGISTER_W
+};
+
 class Memory
 {
 public:
@@ -38,19 +52,7 @@ public:
 	static const int kEchoSize = 0xFE00 - kEchoBase;
 
 	static const int kHramMemoryBase = 0xFF80;
-	static const int kHramMemorySize = 0xFF; // last byte is IE register
-
-	// Define memory addresses for all the memory-mapped registers
-	enum class MemoryMappedRegisters
-	{
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) name = addx,
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) name = addx,
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) name = addx,
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-	};
+	static const int kHramMemorySize = 0xFFFF - kHramMemoryBase; // last byte is IE register
 
 	Memory(const std::shared_ptr<Rom>& rom)
 		: m_pRom(rom)
@@ -62,16 +64,16 @@ public:
 
 	void Reset()
 	{
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) m_##name = 0x00;
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) m_##name = 0x00;
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) m_##name = 0x00;
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) MMR_NAME(name) = 0x00;
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) MMR_NAME(name) = 0x00;
+#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) MMR_NAME(name) = 0x00;
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
 #undef DEFINE_MEMORY_MAPPED_REGISTER_R
 #undef DEFINE_MEMORY_MAPPED_REGISTER_W
 	}
 
-	Uint8 Read8(Uint16 address, bool throwIfUnknown = true, bool* pSuccess = nullptr)
+	Uint8 Read8(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
 	{
 		if (pSuccess)
 		{
@@ -100,24 +102,7 @@ public:
 		}
 		else
 		{
-			switch (address)
-			{
-				// Handle reads to all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: return m_##name;
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: return m_##name;
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) case MemoryMappedRegisters::name: throw Exception("Read from write-only register"); break;
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-			default:
-				if (throwIfUnknown)
-				{
-					throw NotImplementedException();
-				}
-				*pSuccess = false;
-				return 0xFF;
-			}
+			return ReadMemoryMappedRegister(address, throwIfFailed, pSuccess);
 		}
 	}
 	
@@ -168,6 +153,15 @@ public:
 		Write8(address + 1, GetHigh8(value));
 	}
 
+	// Declare storage for all the memory-mapped registers
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) Uint8 MMR_NAME(name);
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) Uint8 MMR_NAME(name);
+#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) Uint8 MMR_NAME(name);
+#include "MemoryMappedRegisters.inc"
+#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
+#undef DEFINE_MEMORY_MAPPED_REGISTER_W
+
 private:
 
 	bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
@@ -175,8 +169,54 @@ private:
 		return (address >= base) && (address < base + rangeSize);
 	}
 
+	static bool breakOnRegisterAccess;
+	static Uint16 breakRegister;
+
+	Uint8 ReadMemoryMappedRegister(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
+	{
+		breakOnRegisterAccess = true;
+		breakRegister = static_cast<Uint16>(MemoryMappedRegisters::IF);
+
+		if (breakOnRegisterAccess && (address == breakRegister))
+		{
+			int x = 3;
+		}
+
+		if (pSuccess)
+		{
+			*pSuccess = true;
+		}
+			
+		switch (address)
+		{
+			// Handle reads to all the memory-mapped registers
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: return MMR_NAME(name);
+#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: return MMR_NAME(name);
+#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) case MemoryMappedRegisters::name: if (throwIfFailed) { throw Exception("Read from write-only register"); } if (pSuccess) { *pSuccess = false; } return 0xFF;
+#include "MemoryMappedRegisters.inc"
+#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
+#undef DEFINE_MEMORY_MAPPED_REGISTER_R
+#undef DEFINE_MEMORY_MAPPED_REGISTER_W
+		default:
+			if (throwIfFailed)
+			{
+				throw NotImplementedException();
+			}
+			if (pSuccess)
+			{
+				*pSuccess = false;
+			}
+			return 0xFF;
+		}
+	}
+
 	void WriteMemoryMappedRegister(Uint16 address, Uint8 value)
 	{
+		if (breakOnRegisterAccess && (address == breakRegister))
+		{
+			int x = 3;
+		}
+
 		switch (address)
 		{
 		case MemoryMappedRegisters::DIV: value = 0; break;
@@ -188,10 +228,10 @@ private:
 				if (value & Bit7)
 				{
 					//printf("Serial output byte: %c (0x%02lX)\n", m_SB, m_SB);
-					printf("%c", m_SB);
-					m_SC &= ~Bit7;
+					printf("%c", SB);
+					SC &= ~Bit7;
 					// Read zeroes
-					m_SB = 0;
+					SB = 0;
 				}
 			}
 		}
@@ -199,9 +239,9 @@ private:
 		switch (address)
 		{
 			// Handle writes to all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: m_##name = value; break;
+#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: MMR_NAME(name) = value; break;
 #define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: throw Exception("Write to read-only register"); break;
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) case MemoryMappedRegisters::name: m_##name = value; break;
+#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) case MemoryMappedRegisters::name: MMR_NAME(name) = value; break;
 #include "MemoryMappedRegisters.inc"
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
 #undef DEFINE_MEMORY_MAPPED_REGISTER_R
@@ -211,15 +251,6 @@ private:
 		}
 	}
 	
-	// Declare storage for all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) Uint8 m_##name;
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) Uint8 m_##name;
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) Uint8 m_##name;
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-
 	std::shared_ptr<Rom> m_pRom;
 	OperationMode m_mode;
 	char m_vram[kVramSize];

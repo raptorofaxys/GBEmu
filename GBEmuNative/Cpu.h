@@ -33,6 +33,8 @@ public:
 
 	Cpu(const std::shared_ptr<Memory>& memory)
 		: m_pMemory(memory)
+		, IE(memory->IE)
+		, IF(memory->IF)
 	{
 		Reset();
 	}
@@ -53,14 +55,42 @@ public:
 		BC = 0x0013;
 		DE = 0x00D8;
 		HL = 0x014D;
+	}
 
-		//@TODO: initial state
-		//Write8(Memory::MemoryMappedRegisters::TIMA, 0);
+	void DebugNextOpcode()
+	{
+		DebugOpcode(Peek8());
 	}
 
 	Sint32 ExecuteSingleInstruction()
 	{
 		Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
+
+		// Check for interrupts
+		if (IME)
+		{
+			if (CallInterruptVectorIfRequired(Bit0, 0x40))
+			{
+				// VBlank interrupt
+			}
+			else if (CallInterruptVectorIfRequired(Bit1, 0x48))
+			{
+				// LCD STAT
+			}
+			else if (CallInterruptVectorIfRequired(Bit2, 0x50))
+			{
+				// Timer
+			}
+			else if (CallInterruptVectorIfRequired(Bit3, 0x58))
+			{
+				// Serial
+			}
+			else if (CallInterruptVectorIfRequired(Bit4, 0x60))
+			{
+				// Joypad
+			}
+		}
+
 		if (!m_cpuHalted && !m_cpuStopped)
 		{
 			instructionCycles = DoExecuteSingleInstruction();
@@ -75,6 +105,11 @@ public:
 
 		SDL_assert(instructionCycles != -1);
 		return instructionCycles;
+	}
+
+	void SetTraceEnabled(bool enabled)
+	{
+		m_traceEnabled = enabled;
 	}
 
 private:
@@ -254,6 +289,12 @@ private:
 	{
 		Push16(PC);
 		PC = address;
+	}
+
+	void CallI(Uint16 address)
+	{
+		IME = false;
+		Call(address);
 	}
 
 	void Ret()
@@ -624,6 +665,8 @@ private:
 	{
 		if (m_traceEnabled)
 		{
+			//SetForegroundConsoleColor();
+
 			static const char* opcodeMnemonics[256] =
 			{
 				// This was preprocessed using macros and a spreadsheet from http://imrannazar.com/Gameboy-Z80-Opcode-Map
@@ -645,7 +688,7 @@ private:
 				"LDH A,(n)", "POP AF", "XX", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,d", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
 			};
 
-			printf("0x%04lX: %s  (0x%02lX)\n", PC, opcodeMnemonics[opcode], opcode);
+			printf("-----\n0x%04lX: %s  (0x%02lX)\n", PC, opcodeMnemonics[opcode], opcode);
 			printf("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
 				A,
 				GetFlagValue(FlagBitIndex::Zero) ? "Z" : "z",
@@ -677,8 +720,6 @@ private:
 		// of virtual functions, we could simply use std::function (or raw function pointers), but that still means runtime branching.
 		// What's interesting is that the opcode case expression is constant, which means we could use template logic to get the compiler to generate the appropriate code for each individual opcode based on the case expression.
 		// This requires a case label per opcode, but it generates debuggable code in debug targets and very efficient code in release.  (Many LD variants compile to two MOV instructions.)
-
-		DebugOpcode(Peek8());
 
 		Uint8 opcode = Fetch8();
 		bool unknownOpcode = false;
@@ -1233,6 +1274,21 @@ private:
 	}
 
 	///////////////////////////////////////////////////////////////////////////
+	// Interrupts
+	///////////////////////////////////////////////////////////////////////////
+
+	bool CallInterruptVectorIfRequired(Uint8 bit, Uint8 vector)
+	{
+		if (IF & IE & bit)
+		{
+			IF &= ~bit;
+			CallI(vector);
+			return true;
+		}
+		return false;
+	}
+
+	///////////////////////////////////////////////////////////////////////////
 	// CPU State members
 	///////////////////////////////////////////////////////////////////////////
 
@@ -1259,6 +1315,10 @@ private:
 	Uint16 SP;
 	Uint16 PC;
 	bool IME; // whether interrupts are enabled - very special register, not memory-mapped
+
+	Uint8& IE;
+	Uint8& IF;
+
 	bool m_cpuHalted;
 	bool m_cpuStopped;
 

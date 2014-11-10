@@ -89,6 +89,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Emulator.cpp" />
+    <ClCompile Include="Memory.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -96,6 +97,7 @@
     <ClInclude Include="GameBoy.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Rom.h" />
+    <ClInclude Include="Timer.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
