@@ -55,10 +55,13 @@ public:
 
 		while (m_cyclesRemaining > 0)
 		{
-			printf("%f cycles executed\n", m_totalCyclesExecuted);
+			//if (m_totalCyclesExecuted > Cpu::kCyclesPerSecond)
+			//{
+			//	printf("%f cycles executed TIMA: %d\n", m_totalCyclesExecuted, m_pMemory->TIMA);
+			//}
 
 			m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
-			m_pCpu->SetTraceEnabled(true);
+			//m_pCpu->SetTraceEnabled(true);
 			m_pCpu->DebugNextOpcode();
 
 			SDL_Keycode keycode = SDLK_UNKNOWN;
@@ -78,7 +81,9 @@ public:
 			}
 
 			auto instructionCycles = m_pCpu->ExecuteSingleInstruction();
+			//auto instructionCycles = 4;
 			m_totalCyclesExecuted += instructionCycles;
+			g_totalCyclesExecuted += instructionCycles;
 			m_cyclesRemaining -= instructionCycles;
 
 			auto timeSpentOnInstruction = timePerClockCycle * instructionCycles;

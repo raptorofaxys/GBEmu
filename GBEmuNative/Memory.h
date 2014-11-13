@@ -8,6 +8,8 @@
 
 //class Mapper
 
+extern float g_totalCyclesExecuted;
+
 #define MMR_NAME(x) x
 
 // Define memory addresses for all the memory-mapped registers
@@ -179,6 +181,7 @@ private:
 
 		if (breakOnRegisterAccess && (address == breakRegister))
 		{
+			printf("Read 0x%04lX @ %f c (TIMA = %d)\n", address, g_totalCyclesExecuted, TIMA);
 			int x = 3;
 		}
 
@@ -214,6 +217,7 @@ private:
 	{
 		if (breakOnRegisterAccess && (address == breakRegister))
 		{
+			printf("Write 0x%04lX: %d @ %f c (TIMA = %d)\n", address, value, g_totalCyclesExecuted, TIMA);
 			int x = 3;
 		}
 

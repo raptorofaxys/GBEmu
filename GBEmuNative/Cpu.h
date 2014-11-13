@@ -205,28 +205,28 @@ private:
 	//	OPCODE(0x34, 8, INC_0_3__4__0_3__C)
 	//	OPCODE(0x3C, 4, INC_0_3__4__0_3__C)
 
-	void ADD(Uint8 operand)
+	void ADD(Uint8 operand, Uint8 carry = 0)
 	{
 		auto oldValue = A;
-		A = oldValue + operand;
-		SetFlagsForAdd(oldValue, operand);
+		A = oldValue + operand + carry;
+		SetFlagsForAdd(oldValue, operand, carry, FlagBitMask::All);
 	}
 
 	void ADC(Uint8 operand)
 	{
-		ADD(operand + (GetFlagValue(FlagBitIndex::Carry) ? 1 : 0));
+		ADD(operand, GetFlagValue(FlagBitIndex::Carry) ? 1 : 0);
 	}
 
-	void SUB(Uint8 operand)
+	void SUB(Uint8 operand, Uint8 carry = 0)
 	{
 		auto oldValue = A;
-		A = oldValue - operand;
-		SetFlagsForSub(oldValue, operand);
+		A = oldValue - (operand + carry);
+		SetFlagsForSub(oldValue, operand, carry, FlagBitMask::All);
 	}
 
 	void SBC(Uint8 operand)
 	{
-		SUB(operand + (GetFlagValue(FlagBitIndex::Carry) ? 1 : 0));
+		SUB(operand, GetFlagValue(FlagBitIndex::Carry) ? 1 : 0);
 	}
 
 	void AND(Uint8 value)
@@ -256,20 +256,69 @@ private:
 		SetFlagValue(FlagBitIndex::Carry, false);
 	}
 
-	Uint8 RL(Uint8 oldValue)
+	Uint8 RLC(Uint8 oldValue, bool setZeroFlagFromValue)
 	{
-		Uint8 newValue = (oldValue << 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit0 : 0);
-		SetZeroFlagFromValue(newValue);
+
+		Uint8 newValue = (oldValue << 1) | ((oldValue & Bit7) >> 7);
+		if (setZeroFlagFromValue)
+		{
+			SetZeroFlagFromValue(newValue);
+		}
+		else
+		{
+			SetFlagValue(FlagBitIndex::Zero, false);
+		}
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit7) != 0);
 		return newValue;
 	}
 
-	Uint8 RR(Uint8 oldValue)
+	Uint8 RRC(Uint8 oldValue, bool setZeroFlagFromValue)
+	{
+		Uint8 newValue = (oldValue >> 1) | ((oldValue & Bit0) << 7);
+		if (setZeroFlagFromValue)
+		{
+			SetZeroFlagFromValue(newValue);
+		}
+		else
+		{
+			SetFlagValue(FlagBitIndex::Zero, false);
+		}
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
+		return newValue;
+	}
+
+	Uint8 RL(Uint8 oldValue, bool setZeroFlagFromValue)
+	{
+		Uint8 newValue = (oldValue << 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit0 : 0);
+		if (setZeroFlagFromValue)
+		{
+			SetZeroFlagFromValue(newValue);
+		}
+		else
+		{
+			SetFlagValue(FlagBitIndex::Zero, false);
+		}
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit7) != 0);
+		return newValue;
+	}
+
+	Uint8 RR(Uint8 oldValue, bool setZeroFlagFromValue)
 	{
 		Uint8 newValue = (oldValue >> 1) | (GetFlagValue(FlagBitIndex::Carry) ? Bit7 : 0);
-		SetZeroFlagFromValue(newValue);
+		if (setZeroFlagFromValue)
+		{
+			SetZeroFlagFromValue(newValue);
+		}
+		else
+		{
+			SetFlagValue(FlagBitIndex::Zero, false);
+		}
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
@@ -331,7 +380,7 @@ private:
 		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
 		auto newValue = oldValue + 1;
 		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
-		SetFlagsForAdd(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
+		SetFlagsForAdd(oldValue, 1, 0, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
 	}
 
 	template <int N> void DEC_0_3__5__0_3__D()
@@ -339,7 +388,7 @@ private:
 		auto oldValue = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
 		auto newValue = oldValue - 1;
 		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
-		SetFlagsForSub(oldValue, 1, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
+		SetFlagsForSub(oldValue, 1, 0, FlagBitMask::Zero | FlagBitMask::Subtract | FlagBitMask::HalfCarry);
 	}
 
 	template <int N> void LD_0_3__6__0_3__E()
@@ -360,15 +409,30 @@ private:
 		SetFlagsForAdd16(oldValue, operand);
 	}
 
+	template <int N> void RLC_0__7()
+	{
+		A = RLC(A, false);
+	}
+
 	template <int N> void LD_0__8()
 	{
 		Write16(Fetch16(), SP);
+	}
+
+	template <int N> void RRC_0__F()
+	{
+		A = RRC(A, false);
 	}
 
 	template <int N> void STOP_1__0()
 	{
 		m_cpuStopped = true;
 		printf("CPU STOPped");
+	}
+
+	template <int N> void RL_1__7()
+	{
+		A = RL(A, false);
 	}
 
 	template <int N> void JR_1__8()
@@ -379,7 +443,7 @@ private:
 
 	template <int N> void RR_1__F()
 	{
-		A = RR(A);
+		A = RR(A, false);
 	}
 
 	template <int N> void JR_2_3__0__2_3__8()
@@ -470,6 +534,20 @@ private:
 		SetFlagValue(FlagBitIndex::HalfCarry, true);
 	}
 
+	template <int N> void SCF_3__7()
+	{
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, true);
+	}
+
+	template <int N> void CCF_3__F()
+	{
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, !GetFlagValue(FlagBitIndex::Carry));
+	}
+
 	template <int N> void LD_4_7__0_F__NO_7__6()
 	{
 		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
@@ -480,11 +558,36 @@ private:
 		m_cpuHalted = true;
 		if (!IME)
 		{
-			throw Exception("HALT with IME disabled");
+			printf("HALT with IME disabled");
 		}
 		printf("CPU HALTed");
 	}
 
+	template <int N> void ADD_8__0_7()
+	{
+		ADD(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+	
+	template <int N> void ADC_8__8_F()
+	{
+		ADC(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+
+	template <int N> void SUB_9__0_7()
+	{
+		SUB(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+	
+	template <int N> void SBC_9__8_F()
+	{
+		SBC(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+
+	template <int N> void AND_A__0_7()
+	{
+		AND(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
+	}
+	
 	template <int N> void XOR_A__8_F()
 	{
 		XOR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
@@ -537,22 +640,54 @@ private:
 		Call(isrAddress);
 	}
 
+	template <int N> void RLC_CB_0__0_7()
+	{
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RLC(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>(), true));
+	}
+
+	template <int N> void RRC_CB_0__8_F()
+	{
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RRC(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>(), true));
+	}
+
 	template <int N> void RL_CB_1__0_7()
 	{
-		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RL(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>()));
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RL(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>(), true));
 	}
 	
 	template <int N> void RR_CB_1__8_F()
 	{
-		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>()));
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(RR(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>(), true));
+	}
+
+	template <int N> void SLA_CB_2__0_7()
+	{
+		Uint8 oldValue = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>();
+		Uint8 newValue = oldValue << 1;
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetZeroFlagFromValue(newValue);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit7) != 0);
+	}
+	
+	template <int N> void SRA_CB_2__8_F()
+	{
+		Uint8 oldValue = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>();
+		Uint8 newValue = (oldValue >> 1) | (oldValue & Bit7);
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetZeroFlagFromValue(newValue);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, false);
+		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
 	}
 
 	template <int N> void SWAP_CB_3__0_7()
 	{
-		auto value = b3_5_B_C_D_E_H_L_iHL_A_Read8<N>();
-		Uint8 newValue = GetHigh4(value) | (GetLow4(value) << 4);
-		b3_5_B_C_D_E_H_L_iHL_A_Write8<N>(value);
-		SetZeroFlagFromValue(value);
+		auto oldValue = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>();
+		Uint8 newValue = GetHigh4(oldValue) | (GetLow4(oldValue) << 4);
+		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(newValue);
+		SetZeroFlagFromValue(newValue);
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 		SetFlagValue(FlagBitIndex::Carry, false);
@@ -611,6 +746,18 @@ private:
 		OR(Fetch8());
 	}
 
+	template <int N> void ADD_E__8()
+	{
+		Sint8 displacement = Fetch8();
+		auto oldValue = SP;
+		SP = SP + displacement;
+		SetFlagValue(FlagBitIndex::Zero, false);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Sint32>(GetLow12(oldValue)) + displacement) > 0xFFF);
+		SetFlagValue(FlagBitIndex::Carry, (static_cast<Sint32>(oldValue) + displacement) > 0xFFFF);
+//		SetFlagsForAdd16(oldValue, displacement);
+	}
+
 	template <int N> void LDH_F__0()
 	{
 		auto displacement = Fetch8();
@@ -628,6 +775,7 @@ private:
 		auto oldValue = SP;
 		Sint8 displacement = Fetch8();
 		HL = SP + displacement;
+		SetFlagValue(FlagBitIndex::Zero, false);
 		SetFlagsForAdd16(oldValue, displacement);
 	}
 
@@ -776,6 +924,8 @@ private:
 		OPCODE(0x36, 12, LD_0_3__6__0_3__E)
 		OPCODE(0x3E, 8, LD_0_3__6__0_3__E)
 
+		OPCODE(0x07, 4, RLC_0__7)
+
 		OPCODE(0x09, 8, ADD_0_3__9)
 		OPCODE(0x19, 8, ADD_0_3__9)
 		OPCODE(0x29, 8, ADD_0_3__9)
@@ -786,7 +936,11 @@ private:
 		OPCODE(0x2B, 8, DEC_0_3__B)
 		OPCODE(0x3B, 8, DEC_0_3__B)
 
+		OPCODE(0x0F, 4, RRC_0__F)
+
 		OPCODE(0x10, 4, STOP_1__0)
+
+		OPCODE(0x17, 4, RL_1__7)
 
 		OPCODE(0x18, 8, JR_1__8)
 
@@ -805,6 +959,10 @@ private:
 		OPCODE(0x27, 4, DAA_2__7)
 
 		OPCODE(0x2F, 4, CPL_2__F)
+
+		OPCODE(0x37, 4, SCF_3__7)
+
+		OPCODE(0x3F, 4, CCF_3__F)
 
 		OPCODE(0x40, 4, LD_4_7__0_F__NO_7__6)
 		OPCODE(0x41, 4, LD_4_7__0_F__NO_7__6)
@@ -871,6 +1029,51 @@ private:
 		OPCODE(0x7F, 4, LD_4_7__0_F__NO_7__6)
 			
 		OPCODE(0x76, 4, HALT_7__6)
+
+		OPCODE(0x80, 4, ADD_8__0_7)
+		OPCODE(0x81, 4, ADD_8__0_7)
+		OPCODE(0x82, 4, ADD_8__0_7)
+		OPCODE(0x83, 4, ADD_8__0_7)
+		OPCODE(0x84, 4, ADD_8__0_7)
+		OPCODE(0x85, 4, ADD_8__0_7)
+		OPCODE(0x86, 8, ADD_8__0_7)
+		OPCODE(0x87, 4, ADD_8__0_7)
+
+		OPCODE(0x88, 4, ADC_8__8_F)
+		OPCODE(0x89, 4, ADC_8__8_F)
+		OPCODE(0x8A, 4, ADC_8__8_F)
+		OPCODE(0x8B, 4, ADC_8__8_F)
+		OPCODE(0x8C, 4, ADC_8__8_F)
+		OPCODE(0x8D, 4, ADC_8__8_F)
+		OPCODE(0x8E, 8, ADC_8__8_F)
+		OPCODE(0x8F, 4, ADC_8__8_F)
+
+		OPCODE(0x90, 4, SUB_9__0_7)
+		OPCODE(0x91, 4, SUB_9__0_7)
+		OPCODE(0x92, 4, SUB_9__0_7)
+		OPCODE(0x93, 4, SUB_9__0_7)
+		OPCODE(0x94, 4, SUB_9__0_7)
+		OPCODE(0x95, 4, SUB_9__0_7)
+		OPCODE(0x96, 8, SUB_9__0_7)
+		OPCODE(0x97, 4, SUB_9__0_7)
+
+		OPCODE(0x98, 4, SBC_9__8_F)
+		OPCODE(0x99, 4, SBC_9__8_F)
+		OPCODE(0x9A, 4, SBC_9__8_F)
+		OPCODE(0x9B, 4, SBC_9__8_F)
+		OPCODE(0x9C, 4, SBC_9__8_F)
+		OPCODE(0x9D, 4, SBC_9__8_F)
+		OPCODE(0x9E, 8, SBC_9__8_F)
+		OPCODE(0x9F, 4, SBC_9__8_F)
+
+		OPCODE(0xA0, 4, AND_A__0_7)
+		OPCODE(0xA1, 4, AND_A__0_7)
+		OPCODE(0xA2, 4, AND_A__0_7)
+		OPCODE(0xA3, 4, AND_A__0_7)
+		OPCODE(0xA4, 4, AND_A__0_7)
+		OPCODE(0xA5, 4, AND_A__0_7)
+		OPCODE(0xA6, 8, AND_A__0_7)
+		OPCODE(0xA7, 4, AND_A__0_7)
 
 		OPCODE(0xA8, 4, XOR_A__8_F)
 		OPCODE(0xA9, 4, XOR_A__8_F)
@@ -979,6 +1182,24 @@ private:
 				opcode = Fetch8();
 				switch (opcode)
 				{
+					OPCODE(0x00, 8, RLC_CB_0__0_7)
+					OPCODE(0x01, 8, RLC_CB_0__0_7)
+					OPCODE(0x02, 8, RLC_CB_0__0_7)
+					OPCODE(0x03, 8, RLC_CB_0__0_7)
+					OPCODE(0x04, 8, RLC_CB_0__0_7)
+					OPCODE(0x05, 8, RLC_CB_0__0_7)
+					OPCODE(0x06, 16, RLC_CB_0__0_7)
+					OPCODE(0x07, 8, RLC_CB_0__0_7)
+
+					OPCODE(0x08, 8, RRC_CB_0__8_F)
+					OPCODE(0x09, 8, RRC_CB_0__8_F)
+					OPCODE(0x0A, 8, RRC_CB_0__8_F)
+					OPCODE(0x0B, 8, RRC_CB_0__8_F)
+					OPCODE(0x0C, 8, RRC_CB_0__8_F)
+					OPCODE(0x0D, 8, RRC_CB_0__8_F)
+					OPCODE(0x0E, 16, RRC_CB_0__8_F)
+					OPCODE(0x0F, 8, RRC_CB_0__8_F)
+
 					OPCODE(0x10, 8, RL_CB_1__0_7)
 					OPCODE(0x11, 8, RL_CB_1__0_7)
 					OPCODE(0x12, 8, RL_CB_1__0_7)
@@ -996,6 +1217,24 @@ private:
 					OPCODE(0x1D, 8, RR_CB_1__8_F)
 					OPCODE(0x1E, 12, RR_CB_1__8_F)
 					OPCODE(0x1F, 8, RR_CB_1__8_F)
+
+					OPCODE(0x20, 8, SLA_CB_2__0_7)
+					OPCODE(0x21, 8, SLA_CB_2__0_7)
+					OPCODE(0x22, 8, SLA_CB_2__0_7)
+					OPCODE(0x23, 8, SLA_CB_2__0_7)
+					OPCODE(0x24, 8, SLA_CB_2__0_7)
+					OPCODE(0x25, 8, SLA_CB_2__0_7)
+					OPCODE(0x26, 16, SLA_CB_2__0_7)
+					OPCODE(0x27, 8, SLA_CB_2__0_7)
+
+					OPCODE(0x28, 8, SRA_CB_2__8_F)
+					OPCODE(0x29, 8, SRA_CB_2__8_F)
+					OPCODE(0x2A, 8, SRA_CB_2__8_F)
+					OPCODE(0x2B, 8, SRA_CB_2__8_F)
+					OPCODE(0x2C, 8, SRA_CB_2__8_F)
+					OPCODE(0x2D, 8, SRA_CB_2__8_F)
+					OPCODE(0x2E, 16, SRA_CB_2__8_F)
+					OPCODE(0x2F, 8, SRA_CB_2__8_F)
 
 					OPCODE(0x30, 8, SWAP_CB_3__0_7)
 					OPCODE(0x31, 8, SWAP_CB_3__0_7)
@@ -1056,6 +1295,8 @@ private:
 				Write8(address, A);
 			}
 			break;
+
+		OPCODE(0xE8, 16, ADD_E__8)
 
 		OPCODE(0xEE, 8, XOR_E__E)
 
@@ -1204,11 +1445,11 @@ private:
 	// Flags
 	///////////////////////////////////////////////////////////////////////////
 
-	void SetFlagsForAdd(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
+	void SetFlagsForAdd(Uint8 oldValue, Uint8 operand, Uint8 carry, Uint8 flagMask)
 	{
 		if (flagMask & FlagBitMask::Zero)
 		{
-			SetZeroFlagFromValue(oldValue + operand);
+			SetZeroFlagFromValue(oldValue + operand + carry);
 		}
 
 		if (flagMask & FlagBitMask::Subtract)
@@ -1218,20 +1459,20 @@ private:
 
 		if (flagMask & FlagBitMask::HalfCarry)
 		{
-			SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand)) > 0xF);
+			SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(oldValue)) + GetLow4(operand) + carry) > 0xF);
 		}
 
 		if (flagMask & FlagBitMask::Carry)
 		{
-			SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand) > 0xFF);
+			SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(oldValue) + operand + carry) > 0xFF);
 		}
 	}
 
-	void SetFlagsForSub(Uint8 oldValue, Uint8 operand, Uint8 flagMask = FlagBitMask::All)
+	void SetFlagsForSub(Uint8 oldValue, Uint8 operand, Uint8 carry, Uint8 flagMask = FlagBitMask::All)
 	{
 		if (flagMask & FlagBitMask::Zero)
 		{
-			SetZeroFlagFromValue(oldValue - operand);
+			SetZeroFlagFromValue(oldValue - (operand + carry));
 		}
 
 		if (flagMask & FlagBitMask::Subtract)
@@ -1241,20 +1482,20 @@ private:
 
 		if (flagMask & FlagBitMask::HalfCarry)
 		{
-			SetFlagValue(FlagBitIndex::HalfCarry, static_cast<Uint16>(GetLow4(oldValue)) >= GetLow4(operand));
+			SetFlagValue(FlagBitIndex::HalfCarry, static_cast<Uint16>(GetLow4(oldValue)) < GetLow4(operand) + carry);
 		}
 
 		if (flagMask & FlagBitMask::Carry)
 		{
-			SetFlagValue(FlagBitIndex::Carry, static_cast<Uint16>(oldValue) >= operand);
+			SetFlagValue(FlagBitIndex::Carry, static_cast<Uint16>(oldValue) < operand + carry);
 		}
 	}
 
 	void SetFlagsForAdd16(Uint16 oldValue, Uint16 operand)
 	{
 		SetFlagValue(FlagBitIndex::Subtract, false);
-		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint32>(GetLow12(oldValue)) + GetLow12(operand)) > 0xFFF);
-		SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint32>(oldValue) + operand) > 0xFFFF);
+		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Sint32>(GetLow12(oldValue)) + GetLow12(operand)) > 0xFFF);
+		SetFlagValue(FlagBitIndex::Carry, (static_cast<Sint32>(oldValue) + operand) > 0xFFFF);
 	}
 
 	void SetZeroFlagFromValue(Uint8 value)
