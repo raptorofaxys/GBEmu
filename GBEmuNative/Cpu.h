@@ -91,6 +91,11 @@ public:
 			}
 		}
 
+		if (m_cpuHalted && IF)
+		{
+			m_cpuHalted = false;
+		}
+
 		if (!m_cpuHalted && !m_cpuStopped)
 		{
 			instructionCycles = DoExecuteSingleInstruction();
@@ -556,11 +561,6 @@ private:
 	template <int N> void HALT_7__6()
 	{
 		m_cpuHalted = true;
-		if (!IME)
-		{
-			printf("HALT with IME disabled");
-		}
-		printf("CPU HALTed");
 	}
 
 	template <int N> void ADD_8__0_7()
@@ -1330,7 +1330,6 @@ private:
 		OPCODE(0xEB, 4, IllegalOpcode)
 		OPCODE(0xEC, 4, IllegalOpcode)
 		OPCODE(0xED, 4, IllegalOpcode)
-		OPCODE(0xF2, 4, IllegalOpcode)
 		OPCODE(0xF4, 4, IllegalOpcode)
 		OPCODE(0xFC, 4, IllegalOpcode)
 		OPCODE(0xFD, 4, IllegalOpcode)

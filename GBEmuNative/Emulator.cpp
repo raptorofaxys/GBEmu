@@ -34,12 +34,15 @@ int main(int argc, char **argv)
 		//GameBoy gb("cpu_instrs\\source\\test.gb");
 		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
 		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
-		//GameBoy gb("cpu_instrs\\individual\\03-op sp,hl.gb");
+		GameBoy gb("cpu_instrs\\individual\\03-op sp,hl.gb"); // fails: e8 f8
 		//GameBoy gb("cpu_instrs\\individual\\04-op r,imm.gb");
 		//GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
 		//GameBoy gb("cpu_instrs\\individual\\06-ld r,r.gb");
 		//GameBoy gb("cpu_instrs\\individual\\07-jr,jp,call,ret,rst.gb");
-		GameBoy gb("cpu_instrs\\individual\\09-op r,r.gb");
+		//GameBoy gb("cpu_instrs\\individual\\08-misc instrs.gb"); // missing f2
+		//GameBoy gb("cpu_instrs\\individual\\09-op r,r.gb");
+		//GameBoy gb("cpu_instrs\\individual\\10-bit ops.gb"); // missing CB 40
+		//GameBoy gb("cpu_instrs\\individual\\11-op a,(hl).gb"); // missing CB 46
 		const auto& gameName = gb.GetRom().GetRomName();
 
 		std::shared_ptr<SDL_Window> pWindow(SDL_CreateWindow(gameName.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, GameBoy::kScreenWidth * 4, GameBoy::kScreenHeight * 4, 0), SDL_DestroyWindow);
