@@ -85,28 +85,13 @@ public:
 				return true;
 			}
 			break;
-			SERVICE_MMR_RW(TIMA)
-			SERVICE_MMR_RW(TMA)
-			SERVICE_MMR_RW(TAC)
+		SERVICE_MMR_RW(TIMA)
+		SERVICE_MMR_RW(TMA)
+		SERVICE_MMR_RW(TAC)
 		}
 	
 		return false;
 	}
-
-	//virtual bool HandlesAddress(Uint16 address)
-	//{
-	//	switch (address)
-	//	{
-	//	}
-	//}
-
-	//virtual Uint8 Read(Uint16 address)
-	//{
-	//}
-
-	//virtual void Write(Uint16 address, Uint8 value)
-	//{
-	//}
 
 	Uint8 DIV;
 	Uint8 TIMA;

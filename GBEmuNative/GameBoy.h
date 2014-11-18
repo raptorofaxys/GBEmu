@@ -4,6 +4,7 @@
 #include "MemoryBus.h"
 #include "Cpu.h"
 #include "Timer.h"
+#include "GameLinkPort.h"
 
 class GameBoy
 {
@@ -23,9 +24,11 @@ public:
 		m_pMemory.reset(new MemoryBus());
 		m_pCpu.reset(new Cpu(m_pMemory));
 		m_pTimer.reset(new Timer(m_pMemory));
+		m_pGameLinkPort.reset(new GameLinkPort());
 
 		m_pMemory->AddDevice(m_pRom);
 		m_pMemory->AddDevice(m_pTimer);
+		m_pMemory->AddDevice(m_pGameLinkPort);
 
 		Reset();
 	}
@@ -100,6 +103,7 @@ private:
 	std::shared_ptr<MemoryBus> m_pMemory;
 	std::shared_ptr<Cpu> m_pCpu;
 	std::shared_ptr<Timer> m_pTimer;
+	std::shared_ptr<GameLinkPort> m_pGameLinkPort;
 
 	float m_totalCyclesExecuted;
 	float m_cyclesRemaining;

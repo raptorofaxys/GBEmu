@@ -95,6 +95,7 @@
   <ItemGroup>
     <ClInclude Include="Cpu.h" />
     <ClInclude Include="GameBoy.h" />
+    <ClInclude Include="GameLinkPort.h" />
     <ClInclude Include="MemoryBus.h" />
     <ClInclude Include="IMemoryBusDevice.h" />
     <ClInclude Include="Rom.h" />

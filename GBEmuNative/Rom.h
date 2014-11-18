@@ -60,21 +60,6 @@ public:
 		return false;
 	}
 
-	//virtual bool HandlesAddress(Uint16 address)
-	//{
-	//	return IsAddressInRange(address, kRomBase, kRomSize);
-	//}
-
-	//virtual Uint8 Read(Uint16 address)
-	//{
-	//	return m_pRom[address];
-	//}
-
-	//virtual void Write(Uint16 address, Uint8 value)
-	//{
-	//	throw Exception("Attempted to write to ROM area.");
-	//}
-
 private:
 	static const int kNameOffset = 0x134;
 	static const int kNameLength = 0x11;

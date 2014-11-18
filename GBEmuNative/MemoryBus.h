@@ -241,25 +241,6 @@ private:
 
 		switch (address)
 		{
-		//case MemoryMappedRegisters::DIV: value = 0; break;
-			
-			// Serial output
-		case MemoryMappedRegisters::SC:
-			{
-				//@TODO: timing emulation
-				if (value & Bit7)
-				{
-					//printf("Serial output byte: %c (0x%02lX)\n", m_SB, m_SB);
-					printf("%c", SB);
-					SC &= ~Bit7;
-					// Read zeroes
-					SB = 0;
-				}
-			}
-		}
-
-		switch (address)
-		{
 			// Handle writes to all the memory-mapped registers
 #define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: MMR_NAME(name) = value; break;
 #define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: throw Exception("Write to read-only register"); break;
