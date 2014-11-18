@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Rom.h"
-#include "Memory.h"
+#include "MemoryBus.h"
 #include "Cpu.h"
 #include "Timer.h"
 
@@ -20,9 +20,12 @@ public:
 	GameBoy(const char* pFileName)
 	{
 		m_pRom.reset(new Rom(pFileName));
-		m_pMemory.reset(new Memory(m_pRom));
+		m_pMemory.reset(new MemoryBus());
 		m_pCpu.reset(new Cpu(m_pMemory));
 		m_pTimer.reset(new Timer(m_pMemory));
+
+		m_pMemory->AddDevice(m_pRom);
+		m_pMemory->AddDevice(m_pTimer);
 
 		Reset();
 	}
@@ -42,7 +45,7 @@ public:
 		m_pCpu->Reset();
 
 		//@TODO: initial state
-		//Write8(Memory::MemoryMappedRegisters::TIMA, 0);
+		//Write8(MemoryBus::MemoryMappedRegisters::TIMA, 0);
 		//m_pMemory->TIMA = 0;
 	}
 
@@ -94,7 +97,7 @@ public:
 
 private:
 	std::shared_ptr<Rom> m_pRom;
-	std::shared_ptr<Memory> m_pMemory;
+	std::shared_ptr<MemoryBus> m_pMemory;
 	std::shared_ptr<Cpu> m_pCpu;
 	std::shared_ptr<Timer> m_pTimer;
 

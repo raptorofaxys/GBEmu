@@ -1,10 +1,12 @@
 #pragma once
 
-#include "Rom.h"
-
-#include <memory>
+#include "IMemoryBusDevice.h"
+#include "Utils.h"
 
 #include "SDL.h"
+
+#include <memory>
+#include <vector>
 
 //class Mapper
 
@@ -24,7 +26,7 @@ enum class MemoryMappedRegisters
 #undef DEFINE_MEMORY_MAPPED_REGISTER_W
 };
 
-class Memory
+class MemoryBus
 {
 public:
 	enum class OperationMode
@@ -32,10 +34,6 @@ public:
 		RomOnly = 0x00,
 		MBC1 = 0x01,
 	};
-
-	// RomOnly
-	static const int kRomOnlyBase = 0x0000;
-	static const int kRomOnlySize = 0x8000;
 
 	// MBC1
 	static const int kRomBank00Base = 0x0000;
@@ -56,12 +54,17 @@ public:
 	static const int kHramMemoryBase = 0xFF80;
 	static const int kHramMemorySize = 0xFFFF - kHramMemoryBase; // last byte is IE register
 
-	Memory(const std::shared_ptr<Rom>& rom)
-		: m_pRom(rom)
+	MemoryBus()
 	{
-		m_mode = static_cast<OperationMode>(rom->GetRom()[0x147]);
-		SDL_assert((m_mode == OperationMode::RomOnly) || (m_mode == OperationMode::MBC1));
+		//m_mode = static_cast<OperationMode>(rom->GetRom()[0x147]);
+		//SDL_assert((m_mode == OperationMode::RomOnly) || (m_mode == OperationMode::MBC1));
 		Reset();
+	}
+
+	void AddDevice(std::shared_ptr<IMemoryBusDevice> pDevice)
+	{
+		m_devices.push_back(pDevice);
+		m_devicesUnsafe.push_back(pDevice.get());
 	}
 
 	void Reset()
@@ -82,11 +85,27 @@ public:
 			*pSuccess = true;
 		}
 
-		if (IsAddressInRange(address, kRomOnlyBase, kRomOnlySize))
+		Uint8 result = 0;
+
+		// very fast
+		//if (m_devicesUnsafe[0]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
+		//if (m_devicesUnsafe[1]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
+
+		//for (const auto& pDevice: m_devicesUnsafe) // extremely slow(300-400x slower) in debug, even with iterator debugging turned off
+		//for (size_t i = 0; i < m_devicesUnsafe.size(); ++i) // 10-12x slower
+
+		// About the same speed as the range-based for in release
+		auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
+		for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
 		{
-			return m_pRom->GetRom()[address];
+			//const auto& pDevice = m_devicesUnsafe[i];
+			if ((*ppDevice)->HandleRequest(MemoryRequestType::Read, address, result))
+			{
+				return result;
+			}
 		}
-		else if (IsAddressInRange(address, kVramBase, kVramSize))
+
+		if (IsAddressInRange(address, kVramBase, kVramSize))
 		{
 			return m_vram[address - kVramBase];
 		}
@@ -123,11 +142,15 @@ public:
 
 	void Write8(Uint16 address, Uint8 value)
 	{
-		if (IsAddressInRange(address, kRomOnlyBase, kRomOnlySize))
+		for (const auto& pDevice: m_devices)
 		{
-			throw Exception("Attempted to write to ROM area.");
+			if (pDevice->HandleRequest(MemoryRequestType::Write, address, value))
+			{
+				return;
+			}
 		}
-		else if (IsAddressInRange(address, kVramBase, kVramSize))
+
+		if (IsAddressInRange(address, kVramBase, kVramSize))
 		{
 			m_vram[address - kVramBase] = value;
 		}
@@ -166,11 +189,6 @@ public:
 
 private:
 
-	bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
-	{
-		return (address >= base) && (address < base + rangeSize);
-	}
-
 	static bool breakOnRegisterAccess;
 	static Uint16 breakRegister;
 
@@ -181,7 +199,7 @@ private:
 
 		if (breakOnRegisterAccess && (address == breakRegister))
 		{
-			printf("Read 0x%04lX @ %f c (TIMA = %d)\n", address, g_totalCyclesExecuted, TIMA);
+			//printf("Read 0x%04lX @ %f c (TIMA = %d)\n", address, g_totalCyclesExecuted, TIMA);
 			int x = 3;
 		}
 
@@ -217,13 +235,13 @@ private:
 	{
 		if (breakOnRegisterAccess && (address == breakRegister))
 		{
-			printf("Write 0x%04lX: %d @ %f c (TIMA = %d)\n", address, value, g_totalCyclesExecuted, TIMA);
+			//printf("Write 0x%04lX: %d @ %f c (TIMA = %d)\n", address, value, g_totalCyclesExecuted, TIMA);
 			int x = 3;
 		}
 
 		switch (address)
 		{
-		case MemoryMappedRegisters::DIV: value = 0; break;
+		//case MemoryMappedRegisters::DIV: value = 0; break;
 			
 			// Serial output
 		case MemoryMappedRegisters::SC:
@@ -255,7 +273,10 @@ private:
 		}
 	}
 	
-	std::shared_ptr<Rom> m_pRom;
+	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;
+	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
+
+	//std::shared_ptr<Rom> m_pRom;
 	OperationMode m_mode;
 	char m_vram[kVramSize];
 	char m_workMemory[kWorkMemorySize];

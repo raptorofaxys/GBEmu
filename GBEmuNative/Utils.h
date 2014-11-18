@@ -31,7 +31,13 @@ inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
 
 inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
 
-// WARING: the following functions eat up all events
+inline bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
+{
+	return (address >= base) && (address < base + rangeSize);
+}
+
+// WARNING: the following functions eat up all events
+//@TODO: get rid of this, it screws up other event processing
 SDL_Keycode DebugCheckForKeypress();
 SDL_Keycode DebugWaitForKeypress();
 

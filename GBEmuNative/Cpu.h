@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Memory.h"
+#include "MemoryBus.h"
 
 #include <memory>
 
@@ -31,7 +31,7 @@ class Cpu
 public:
 	static Uint32 const kCyclesPerSecond = 4194304;
 
-	Cpu(const std::shared_ptr<Memory>& memory)
+	Cpu(const std::shared_ptr<MemoryBus>& memory)
 		: m_pMemory(memory)
 		, IE(memory->IE)
 		, IF(memory->IF)
@@ -1357,7 +1357,7 @@ private:
 	}
 private:
 	///////////////////////////////////////////////////////////////////////////
-	// Memory access
+	// MemoryBus access
 	///////////////////////////////////////////////////////////////////////////
 
 	std::string DebugStringPeek8(Uint16 address)
@@ -1574,5 +1574,5 @@ private:
 	Uint32 m_totalOpcodesExecuted;
 	bool m_traceEnabled;
 
-	std::shared_ptr<Memory> m_pMemory;
+	std::shared_ptr<MemoryBus> m_pMemory;
 };

@@ -1,19 +1,23 @@
 #pragma once
 
-#include "Memory.h"
+#include "IMemoryBusDevice.h"
 
-class Timer
+class Timer : public IMemoryBusDevice
 {
 public:
+	enum class Registers
+	{
+		DIV = 0xFF04,	// Divider register
+		TIMA = 0xFF05,	// Timer counter
+		TMA = 0xFF06,	// Timer modulo
+		TAC = 0xFF07,	// Timer control
+	};
+
 	static int const kDivFrequency = 16384;
 
-	Timer(const std::shared_ptr<Memory>& memory)
+	Timer(const std::shared_ptr<MemoryBus>& memory)
 		: m_pMemory(memory)
-		, DIV(memory->DIV)
-		, TIMA(memory->TIMA)
-		, TMA(memory->TMA)
-		, TAC(memory->TAC)
-		, IF(memory->IF)
+		, IF(memory->IF) //@TODO: possibly replace with access to CPU (or whatever memory bus device winds up servicing IF requests)
 	{
 		Reset();
 	}
@@ -64,13 +68,53 @@ public:
 		}
 	}
 	
-	Uint8& DIV;
-	Uint8& TIMA;
-	Uint8& TMA;
-	Uint8& TAC;
+	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
+	{
+		switch (address)
+		{
+		case Registers::DIV:
+			{
+				if (requestType == MemoryRequestType::Write)
+				{
+					DIV = 0;
+				}
+				else
+				{
+					value = DIV;
+				}
+				return true;
+			}
+			break;
+			SERVICE_MMR_RW(TIMA)
+			SERVICE_MMR_RW(TMA)
+			SERVICE_MMR_RW(TAC)
+		}
+	
+		return false;
+	}
+
+	//virtual bool HandlesAddress(Uint16 address)
+	//{
+	//	switch (address)
+	//	{
+	//	}
+	//}
+
+	//virtual Uint8 Read(Uint16 address)
+	//{
+	//}
+
+	//virtual void Write(Uint16 address, Uint8 value)
+	//{
+	//}
+
+	Uint8 DIV;
+	Uint8 TIMA;
+	Uint8 TMA;
+	Uint8 TAC;
 	Uint8& IF;
 private:
-	std::shared_ptr<Memory> m_pMemory;
+	std::shared_ptr<MemoryBus> m_pMemory;
 	float m_DivTicksRemaining;
 	float m_TimaTicksRemaining;
 };

@@ -1,15 +1,20 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include "IMemoryBusDevice.h"
 
 #include "Utils.h"
 
 #include "SDL.h"
 
-class Rom
+#include <string>
+#include <vector>
+
+class Rom : public IMemoryBusDevice // @TODO: hide behind memory mapper IMemoryBusDevice
 {
 public:
+	static const int kRomBase = 0x0000;
+	static const int kRomSize = 0x8000;
+
 	Rom(const char* pFileName)
 	{
 		LoadFromFile(pFileName);
@@ -36,6 +41,39 @@ public:
 	{
 		return m_pRom;
 	}
+
+	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
+	{
+		if (IsAddressInRange(address, kRomBase, kRomSize))
+		{
+			if (requestType == MemoryRequestType::Write)
+			{
+				throw Exception("Attempted to write to ROM area.");
+			}
+			else
+			{
+				value = m_pRom[address - kRomBase];
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	//virtual bool HandlesAddress(Uint16 address)
+	//{
+	//	return IsAddressInRange(address, kRomBase, kRomSize);
+	//}
+
+	//virtual Uint8 Read(Uint16 address)
+	//{
+	//	return m_pRom[address];
+	//}
+
+	//virtual void Write(Uint16 address, Uint8 value)
+	//{
+	//	throw Exception("Attempted to write to ROM area.");
+	//}
 
 private:
 	static const int kNameOffset = 0x134;

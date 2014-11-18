@@ -1,4 +1,4 @@
-#include "Memory.h"
+#include "MemoryBus.h"
 
-bool Memory::breakOnRegisterAccess = true;
-Uint16 Memory::breakRegister = 0;//static_cast<Uint16>(MemoryMappedRegisters::IF);
+bool MemoryBus::breakOnRegisterAccess = true;
+Uint16 MemoryBus::breakRegister = 0;//static_cast<Uint16>(MemoryMappedRegisters::IF);
