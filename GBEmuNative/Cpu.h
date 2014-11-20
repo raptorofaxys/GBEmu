@@ -103,7 +103,6 @@ public:
 		else
 		{
 			// Simply wait until something interesting occurs, depending on the CPU state
-			//@TODO: handle HALT
 			//@TODO: handle STOP
 			instructionCycles = 4;
 		}
@@ -1115,7 +1114,7 @@ private:
 			{
 				instructionCycles = 12;
 				Uint16 value = 0;
-				//@TODO: refactor with Push? must dissociate the notion of reading and writing from the address itself... like for (HL) in LDs
+				//@TODO: refactor all these into templates
 				switch ((opcode >> 4) & 0x3)
 				{
 				case 0: BC = Pop16(); break;

@@ -4,7 +4,7 @@
 ; touch BC, DE, or HL registers. These ASSUME CPU is at normal
 ; speed. If running at double speed, msec/usec delays are half advertised.
 
-; Delays n cycles, from 0 to 16777215
+; Delays n cycles, from 0 to 16777215 ;@fhamel: the word "cycles" means 1 NOP = 1 cycle, not actual clock cycles (see implementation of delay_clocks below); e.g. a delay of 1 runs a NOP (see delay_)
 ; Preserved: AF, BC, DE, HL
 .macro delay ARGS n
      .if n < 0

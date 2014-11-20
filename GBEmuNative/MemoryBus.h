@@ -56,6 +56,7 @@ public:
 
 	MemoryBus()
 	{
+		//@TODO: memory mapper bus device
 		//m_mode = static_cast<OperationMode>(rom->GetRom()[0x147]);
 		//SDL_assert((m_mode == OperationMode::RomOnly) || (m_mode == OperationMode::MBC1));
 		Reset();

@@ -6,11 +6,23 @@
 
 class GameLinkPort : public IMemoryBusDevice
 {
+public:
 	enum class Registers
 	{
 		SB = 0xFF01,	// Serial transfer data
 		SC = 0xFF02,	// Serial transfer control
 	};
+
+	GameLinkPort()
+	{
+		Reset();
+	}
+
+	void Reset()
+	{
+		SB = 0;
+		SC = 0;
+	}
 
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
 	{

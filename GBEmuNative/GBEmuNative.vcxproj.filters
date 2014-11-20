@@ -50,6 +50,9 @@
     <ClInclude Include="GameLinkPort.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Lcd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MemoryMappedRegisters.inc">

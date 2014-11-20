@@ -5,6 +5,7 @@
 #include "Cpu.h"
 #include "Timer.h"
 #include "GameLinkPort.h"
+#include "Lcd.h"
 
 class GameBoy
 {
@@ -25,10 +26,12 @@ public:
 		m_pCpu.reset(new Cpu(m_pMemory));
 		m_pTimer.reset(new Timer(m_pMemory));
 		m_pGameLinkPort.reset(new GameLinkPort());
+		m_pLcd.reset(new Lcd());
 
 		m_pMemory->AddDevice(m_pRom);
 		m_pMemory->AddDevice(m_pTimer);
 		m_pMemory->AddDevice(m_pGameLinkPort);
+		m_pMemory->AddDevice(m_pLcd);
 
 		Reset();
 	}
@@ -95,6 +98,7 @@ public:
 			auto timeSpentOnInstruction = timePerClockCycle * instructionCycles;
 
 			m_pTimer->Update(timeSpentOnInstruction);
+			m_pLcd->Update(timeSpentOnInstruction);
 		}
 	}
 
@@ -104,6 +108,7 @@ private:
 	std::shared_ptr<Cpu> m_pCpu;
 	std::shared_ptr<Timer> m_pTimer;
 	std::shared_ptr<GameLinkPort> m_pGameLinkPort;
+	std::shared_ptr<Lcd> m_pLcd;
 
 	float m_totalCyclesExecuted;
 	float m_cyclesRemaining;
