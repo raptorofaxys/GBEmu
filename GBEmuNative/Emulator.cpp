@@ -32,9 +32,9 @@ int main(int argc, char **argv)
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
 		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
 		//GameBoy gb("cpu_instrs\\source\\test.gb");
-		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
+		GameBoy gb("cpu_instrs\\individual\\01-special.gb");
 		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
-		GameBoy gb("cpu_instrs\\individual\\03-op sp,hl.gb"); // fails: e8 f8
+		//GameBoy gb("cpu_instrs\\individual\\03-op sp,hl.gb");
 		//GameBoy gb("cpu_instrs\\individual\\04-op r,imm.gb");
 		//GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
 		//GameBoy gb("cpu_instrs\\individual\\06-ld r,r.gb");

@@ -753,9 +753,8 @@ private:
 		SP = SP + displacement;
 		SetFlagValue(FlagBitIndex::Zero, false);
 		SetFlagValue(FlagBitIndex::Subtract, false);
-		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Sint32>(GetLow12(oldValue)) + displacement) > 0xFFF);
-		SetFlagValue(FlagBitIndex::Carry, (static_cast<Sint32>(oldValue) + displacement) > 0xFFFF);
-//		SetFlagsForAdd16(oldValue, displacement);
+
+		SetFlagsForAdd8To16(oldValue, displacement);
 	}
 
 	template <int N> void LDH_F__0()
@@ -776,7 +775,9 @@ private:
 		Sint8 displacement = Fetch8();
 		HL = SP + displacement;
 		SetFlagValue(FlagBitIndex::Zero, false);
-		SetFlagsForAdd16(oldValue, displacement);
+		SetFlagValue(FlagBitIndex::Subtract, false);
+
+		SetFlagsForAdd8To16(oldValue, displacement);
 	}
 
 	template <int N> void LD_F__9()
@@ -1495,6 +1496,14 @@ private:
 		SetFlagValue(FlagBitIndex::Subtract, false);
 		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Sint32>(GetLow12(oldValue)) + GetLow12(operand)) > 0xFFF);
 		SetFlagValue(FlagBitIndex::Carry, (static_cast<Sint32>(oldValue) + operand) > 0xFFFF);
+	}
+
+	void SetFlagsForAdd8To16(Uint16 oldValue, Uint8 operand)
+	{
+		Uint8 u8Displacement = static_cast<Uint8>(operand);
+		Uint8 u8sp = static_cast<Uint8>(oldValue);
+		SetFlagValue(FlagBitIndex::HalfCarry, (static_cast<Uint16>(GetLow4(u8sp)) + GetLow4(u8Displacement)) > 0xF);
+		SetFlagValue(FlagBitIndex::Carry, (static_cast<Uint16>(u8sp) + u8Displacement) > 0xFF);
 	}
 
 	void SetZeroFlagFromValue(Uint8 value)
