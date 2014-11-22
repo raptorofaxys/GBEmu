@@ -96,6 +96,7 @@ public:
 		//for (size_t i = 0; i < m_devicesUnsafe.size(); ++i) // 10-12x slower
 
 		// About the same speed as the range-based for in release
+		//@OPTIMIZE: cache which device is used for which address, either on first access or once for all address at the start.  Then prevent calls to AddDevice.
 		auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
 		for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
 		{

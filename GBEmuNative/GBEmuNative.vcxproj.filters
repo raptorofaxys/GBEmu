@@ -53,6 +53,15 @@
     <ClInclude Include="Lcd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RomOnlyMapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="UnusableMemory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryMapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MemoryMappedRegisters.inc">

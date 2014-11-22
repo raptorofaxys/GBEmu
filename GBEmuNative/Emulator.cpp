@@ -27,13 +27,13 @@ int main(int argc, char **argv)
 
 		Janitor j([] { SDL_Quit(); });
 
-		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
+		GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
 		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb");
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
 		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
 		//GameBoy gb("cpu_instrs\\source\\test.gb");
 		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
-		GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
+		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
 		//GameBoy gb("cpu_instrs\\individual\\03-op sp,hl.gb");
 		//GameBoy gb("cpu_instrs\\individual\\04-op r,imm.gb");
 		//GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
@@ -67,6 +67,10 @@ int main(int argc, char **argv)
 		bool done = false;
 
 		Uint32 lastTicks = SDL_GetTicks();
+		
+		float averageSeconds = -1.0f;
+		Uint32 lastPrintTicks = 0;
+
 		while (!done)
 		{
 			SDL_Event event;
@@ -87,18 +91,28 @@ int main(int argc, char **argv)
 		    }
 
 			Uint32 ticks = SDL_GetTicks();
+
 			auto seconds = (ticks - lastTicks) / 1000.0f;
-			//printf("%f\n", seconds);
 			static float maxTimeStep = 0.1f;
 			seconds = SDL_min(seconds, maxTimeStep);
+
+			static float averagingRate = 0.5f;
+			averageSeconds = (averageSeconds > 0.0f) ? (averageSeconds * (1.0f - averagingRate) + (seconds * averagingRate)) : seconds;
+			if (ticks - lastPrintTicks > 1000)
+			{
+				printf("%3.1f FPS\n", 1.0f / averageSeconds);
+				lastPrintTicks = ticks;
+			}
+
 			gb.Update(seconds);
 			lastTicks = ticks;
 
+			// Set a random color
 			void* pPixels;
 			int pitch;
 			SDL_LockTexture(pFrameBuffer.get(), NULL, &pPixels, &pitch);
 			Uint32* pARGB = static_cast<Uint32*>(pPixels);
-			*pARGB = rand();
+			*pARGB = rand() * rand();
 			SDL_UnlockTexture(pFrameBuffer.get());
 
 		    SDL_RenderClear(pRenderer.get());
