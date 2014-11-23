@@ -92,10 +92,6 @@ public:
 			*pSuccess = true;
 		}
 
-		//EnsureDeviceIsProbed(address);
-
-		Uint8 result = 0;
-
 		// very fast
 		//if (m_devicesUnsafe[0]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
 		//if (m_devicesUnsafe[1]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
@@ -106,15 +102,15 @@ public:
 		// About the same speed as the range-based for in release
 		//@OPTIMIZE: cache which device is used for which address, either on first access or once for all address at the start.  Then prevent calls to AddDevice.
 		//@TODO: can even verify that exactly one device handles each address, to make sure there are no overlapping ranges being handled
-		auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
-		for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
-		{
-			//const auto& pDevice = m_devicesUnsafe[i];
-			if ((*ppDevice)->HandleRequest(MemoryRequestType::Read, address, result))
-			{
-				return result;
-			}
-		}
+		//auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
+		//for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
+		//{
+		//	//const auto& pDevice = m_devicesUnsafe[i];
+		//	if ((*ppDevice)->HandleRequest(MemoryRequestType::Read, address, result))
+		//	{
+		//		return result;
+		//	}
+		//}
 
 		if (IsAddressInRange(address, kVramBase, kVramSize))
 		{
@@ -134,6 +130,15 @@ public:
 		}
 		else
 		{
+			EnsureDeviceIsProbed(address);
+			const auto& deviceIndex = m_deviceIndexAtAddress[address];
+			if (deviceIndex >= 0)
+			{
+				Uint8 result = 0;
+				m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Read, address, result);
+				return result;
+			}
+
 			return ReadMemoryMappedRegister(address, throwIfFailed, pSuccess);
 		}
 	}
@@ -153,13 +158,13 @@ public:
 
 	void Write8(Uint16 address, Uint8 value)
 	{
-		for (const auto& pDevice: m_devices)
-		{
-			if (pDevice->HandleRequest(MemoryRequestType::Write, address, value))
-			{
-				return;
-			}
-		}
+		//for (const auto& pDevice: m_devices)
+		//{
+		//	if (pDevice->HandleRequest(MemoryRequestType::Write, address, value))
+		//	{
+		//		return;
+		//	}
+		//}
 
 		if (IsAddressInRange(address, kVramBase, kVramSize))
 		{
@@ -179,6 +184,14 @@ public:
 		}
 		else
 		{
+			EnsureDeviceIsProbed(address);
+			const auto& deviceIndex = m_deviceIndexAtAddress[address];
+			if (deviceIndex >= 0)
+			{
+				m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Write, address, value);
+				return;
+			}
+
 			WriteMemoryMappedRegister(address, value);
 		}
 	}
