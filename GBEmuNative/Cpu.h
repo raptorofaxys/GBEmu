@@ -753,7 +753,6 @@ private:
 
 	template <int N> void BIT_CB_4_7__0_F()
 	{
-		//Uint8 mask = 1 << b3_5<N>::Value;
 		auto result = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>() & (1 << b3_5<N>::Value);
 		SetZeroFlagFromValue(result);
 		SetFlagValue(FlagBitIndex::Subtract, false);
@@ -762,18 +761,11 @@ private:
 
 	template <int N> void RES_CB_8_B__0_F()
 	{
-		//Uint8 mask = 1 << b3_5<N>::Value;
 		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>() & ~(1 << b3_5<N>::Value));
-
-		//mask = ~(1 << mask);
-		//auto value = b0_2_B_C_D_E_H_L_iHL_A_Read8<N>();
-		//value &= mask;
-		//b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(value);
 	}
 
 	template <int N> void SET_CB_C_F__0_F()
 	{
-		//Uint8 mask = 1 << b3_5<N>::Value;
 		b0_2_B_C_D_E_H_L_iHL_A_Write8<N>(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>() | (1 << b3_5<N>::Value));
 	}
 
