@@ -26,21 +26,18 @@ enum class MemoryMappedRegisters
 #undef DEFINE_MEMORY_MAPPED_REGISTER_W
 };
 
+namespace MemoryDeviceStatus
+{
+	enum Type
+	{
+		Unknown = -2,
+		Unset = -1
+	};
+}
+
 class MemoryBus
 {
 public:
-	enum class OperationMode
-	{
-		RomOnly = 0x00,
-		MBC1 = 0x01,
-	};
-
-	// MBC1
-	static const int kRomBank00Base = 0x0000;
-	static const int kRomBank00Size = 0x4000;
-	static const int kRomBankNBase = 0x4000;
-	static const int kRomBankNSize = 0x4000;
-
 	static const int kVramBase = 0x8000;
 	static const int kVramSize = 0x2000;
 
@@ -54,11 +51,10 @@ public:
 	static const int kHramMemoryBase = 0xFF80;
 	static const int kHramMemorySize = 0xFFFF - kHramMemoryBase; // last byte is IE register
 
+	static const int kAddressSpaceSize = 0x10000;
+
 	MemoryBus()
 	{
-		//@TODO: memory mapper bus device
-		//m_mode = static_cast<OperationMode>(rom->GetRom()[0x147]);
-		//SDL_assert((m_mode == OperationMode::RomOnly) || (m_mode == OperationMode::MBC1));
 		Reset();
 	}
 
@@ -82,6 +78,11 @@ public:
 		memset(m_vram, 0xFD, sizeof(m_vram));
 		memset(m_workMemory, 0xFD, sizeof(m_workMemory));
 		memset(m_hram, 0xFD, sizeof(m_hram));
+
+		for (auto& index: m_deviceIndexAtAddress)
+		{
+			index = MemoryDeviceStatus::Unknown;
+		}
 	}
 
 	Uint8 Read8(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
@@ -90,6 +91,8 @@ public:
 		{
 			*pSuccess = true;
 		}
+
+		//EnsureDeviceIsProbed(address);
 
 		Uint8 result = 0;
 
@@ -200,6 +203,51 @@ private:
 	static bool breakOnRegisterAccess;
 	static Uint16 breakRegister;
 
+	void EnsureDeviceIsProbed(Uint16 address)
+	{
+		// WARNING: this logic assumes reading is a completely "const" operation, and that it changes the state of the hardware in no way.
+		// This is definitely not true on many platforms, but it appears to be the case on GB.  If this assumption does not hold true,
+		// we'll have to add another method or perhaps MemoryRequestType to probe the address without altering state.
+		int& deviceIndexAtAddress = m_deviceIndexAtAddress[address];
+		if (deviceIndexAtAddress == MemoryDeviceStatus::Unknown)
+		{
+			// very fast
+			//if (m_devicesUnsafe[0]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
+			//if (m_devicesUnsafe[1]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
+
+			//for (const auto& pDevice: m_devicesUnsafe) // extremely slow(300-400x slower) in debug, even with iterator debugging turned off
+			//for (size_t i = 0; i < m_devicesUnsafe.size(); ++i) // 10-12x slower
+
+			// About the same speed as the range-based for in release
+			//@OPTIMIZE: cache which device is used for which address, either on first access or once for all address at the start.  Then prevent calls to AddDevice.
+			//@TODO: can even verify that exactly one device handles each address, to make sure there are no overlapping ranges being handled
+			//auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
+			//for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
+			auto numDevices = m_devicesUnsafe.size();
+			for (size_t deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex) // 10-12x slower
+			{
+				const auto& pDevice = m_devicesUnsafe[deviceIndex];
+				Uint8 result;
+				if (pDevice->HandleRequest(MemoryRequestType::Read, address, result))
+				{
+					if (deviceIndexAtAddress == MemoryDeviceStatus::Unknown)
+					{
+						deviceIndexAtAddress = deviceIndex;
+					}
+					else
+					{
+						throw Exception("Two memory devices handle address 0x%04lX", address);
+					}
+				}
+			}
+			
+			if (deviceIndexAtAddress == MemoryDeviceStatus::Unknown)
+			{
+				deviceIndexAtAddress = MemoryDeviceStatus::Unset;
+			}
+		}
+	}
+
 	Uint8 ReadMemoryMappedRegister(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
 	{
 		breakOnRegisterAccess = true;
@@ -265,9 +313,11 @@ private:
 	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 
+	int m_deviceIndexAtAddress[kAddressSpaceSize]; // it's good to be in 2014 - this could be much more efficient but there's no need for that right now
+
 	//std::shared_ptr<Rom> m_pRom;
 	//OperationMode m_mode;
-	char m_vram[kVramSize];
-	char m_workMemory[kWorkMemorySize];
-	char m_hram[kHramMemorySize];
+	Uint8 m_vram[kVramSize];
+	Uint8 m_workMemory[kWorkMemorySize];
+	Uint8 m_hram[kHramMemorySize];
 };

@@ -126,5 +126,7 @@ int main(int argc, char **argv)
 		SDL_assert(false && "Uncaught exception thrown");
 	}
 
+	//DebugWaitForKeypress();
+
     return 0;
 }
