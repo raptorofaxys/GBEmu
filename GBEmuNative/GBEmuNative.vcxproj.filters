@@ -62,6 +62,12 @@
     <ClInclude Include="MemoryMapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Mbc1Mapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Joypad.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="MemoryMappedRegisters.inc">

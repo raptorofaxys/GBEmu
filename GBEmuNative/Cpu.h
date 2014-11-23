@@ -35,12 +35,19 @@ public:
 		: m_pMemory(memory)
 		, IE(memory->IE)
 		, IF(memory->IF)
+//		, m_pTraceLog(nullptr)
 	{
 		Reset();
 	}
 
 	void Reset()
 	{
+		//if (m_pTraceLog)
+		//{
+		//	fclose(m_pTraceLog);
+		//	m_pTraceLog = nullptr;
+		//}
+
 		m_totalOpcodesExecuted = 0;
 		m_traceEnabled = false;
 
@@ -94,6 +101,11 @@ public:
 		if (m_cpuHalted && IF)
 		{
 			m_cpuHalted = false;
+		}
+
+		if (m_cpuStopped && IF)
+		{
+			m_cpuStopped = false;
 		}
 
 		if (!m_cpuHalted && !m_cpuStopped)
@@ -430,8 +442,12 @@ private:
 
 	template <int N> void STOP_1__0()
 	{
-		m_cpuStopped = true;
-		printf("CPU STOPped");
+		// Ignore STOP because it is very tricky to determine whether the game is trying to switch to double-speed mode.
+		//m_cpuStopped = true;
+		//if (Read8(0xFF00) == 0x30)
+		//{
+		//}
+		//throw NotImplementedException();
 	}
 
 	template <int N> void RL_1__7()
@@ -809,6 +825,11 @@ private:
 	// CPU Emulation
 	///////////////////////////////////////////////////////////////////////////
 
+	void TraceLog(const std::string& message)
+	{
+		m_traceLog += message;
+	}
+
 	void DebugOpcode(Uint8 opcode)
 	{
 		if (m_traceEnabled)
@@ -836,18 +857,18 @@ private:
 				"LDH A,(n)", "POP AF", "XX", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,d", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
 			};
 
-			printf("-----\n0x%04lX: %s  (0x%02lX)\n", PC, opcodeMnemonics[opcode], opcode);
-			printf("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
+			TraceLog(Format("-----\n0x%04lX: %s  (0x%02lX)\n", PC, opcodeMnemonics[opcode], opcode));
+			TraceLog(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
 				A,
 				GetFlagValue(FlagBitIndex::Zero) ? "Z" : "z",
 				GetFlagValue(FlagBitIndex::Subtract) ? "S" : "s",
 				GetFlagValue(FlagBitIndex::HalfCarry) ? "H" : "h",
 				GetFlagValue(FlagBitIndex::Carry) ? "C" : "c", 
-				B, C, D, E, H, L);
-			printf("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0);
-			printf("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str());
+				B, C, D, E, H, L));
+			TraceLog(Format("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0));
+			TraceLog(Format("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str()));
 			//printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(PC + 1)));
-			printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str());
+			TraceLog(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
 		}
 	}
 
@@ -1572,6 +1593,8 @@ private:
 
 	Uint32 m_totalOpcodesExecuted;
 	bool m_traceEnabled;
+
+	std::string m_traceLog;
 
 	std::shared_ptr<MemoryBus> m_pMemory;
 };

@@ -44,6 +44,17 @@ SDL_Keycode DebugWaitForKeypress();
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
 std::shared_ptr<std::vector<Uint8>> LoadFileAsByteArray(const char* pFileName);
 
+inline std::string Format(const char* pFormatter, ...)
+{
+	va_list args;
+	va_start(args, pFormatter);
+	char szBuffer[4096];
+	vsnprintf_s(szBuffer, ARRAY_SIZE(szBuffer), pFormatter, args);
+	va_end(args);
+
+	return std::string(szBuffer);
+}
+
 class Exception
 {
 public:

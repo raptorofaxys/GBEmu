@@ -77,6 +77,11 @@ public:
 #undef DEFINE_MEMORY_MAPPED_REGISTER_RW
 #undef DEFINE_MEMORY_MAPPED_REGISTER_R
 #undef DEFINE_MEMORY_MAPPED_REGISTER_W
+
+		// Initialize to illegal opcode 0xFD
+		memset(m_vram, 0xFD, sizeof(m_vram));
+		memset(m_workMemory, 0xFD, sizeof(m_workMemory));
+		memset(m_hram, 0xFD, sizeof(m_hram));
 	}
 
 	Uint8 Read8(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
@@ -97,6 +102,7 @@ public:
 
 		// About the same speed as the range-based for in release
 		//@OPTIMIZE: cache which device is used for which address, either on first access or once for all address at the start.  Then prevent calls to AddDevice.
+		//@TODO: can even verify that exactly one device handles each address, to make sure there are no overlapping ranges being handled
 		auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
 		for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
 		{
@@ -260,7 +266,7 @@ private:
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 
 	//std::shared_ptr<Rom> m_pRom;
-	OperationMode m_mode;
+	//OperationMode m_mode;
 	char m_vram[kVramSize];
 	char m_workMemory[kWorkMemorySize];
 	char m_hram[kHramMemorySize];
