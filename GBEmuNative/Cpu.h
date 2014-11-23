@@ -187,6 +187,15 @@ private:
 	template <int N> Uint16 BC_DE_HL_SP_Read16() { return BC_DE_HL_SP_GetReg16<N>(); }
 	template <int N> void BC_DE_HL_SP_Write16(Uint16 value) { BC_DE_HL_SP_GetReg16<N>() = value; }
 
+	// BC_DE_HL_AF
+	template <int N> Uint16& BC_DE_HL_AF_GetReg16();
+	template <> Uint16& BC_DE_HL_AF_GetReg16<0>() { return BC; }
+	template <> Uint16& BC_DE_HL_AF_GetReg16<1>() { return DE; }
+	template <> Uint16& BC_DE_HL_AF_GetReg16<2>() { return HL; }
+	template <> Uint16& BC_DE_HL_AF_GetReg16<3>() { return AF; }
+	template <int N> Uint16 BC_DE_HL_AF_Read16() { return BC_DE_HL_AF_GetReg16<N>(); }
+	template <int N> void BC_DE_HL_AF_Write16(Uint16 value) { BC_DE_HL_AF_GetReg16<N>() = value; }
+
 	// Bindings for the above to specific bits in the opcode
 	template <int N> Uint8 b0_2_B_C_D_E_H_L_iHL_A_Read8() { return B_C_D_E_H_L_iHL_A_Read8<b0_2<N>::Value>(); }
 	template <int N> void b0_2_B_C_D_E_H_L_iHL_A_Write8(Uint8 value) { B_C_D_E_H_L_iHL_A_Write8<b0_2<N>::Value>(value); }
@@ -201,6 +210,9 @@ private:
 
 	template <int N> Uint16 b4_5_BC_DE_HL_SP_Read16() { return BC_DE_HL_SP_Read16<b4_5<N>::Value>(); }
 	template <int N> void b4_5_BC_DE_HL_SP_Write16(Uint16 value) { BC_DE_HL_SP_Write16<b4_5<N>::Value>(value); }
+
+	template <int N> Uint16 b4_5_BC_DE_HL_AF_Read16() { return BC_DE_HL_AF_Read16<b4_5<N>::Value>(); }
+	template <int N> void b4_5_BC_DE_HL_AF_Write16(Uint16 value) { BC_DE_HL_AF_Write16<b4_5<N>::Value>(value); }
 
 	///////////////////////////////////////////////////////////////////////////
 	// Opcode implementations
@@ -626,6 +638,11 @@ private:
 		}
 	}
 
+	template <int N> void POP_C_F__1()
+	{
+		b4_5_BC_DE_HL_AF_Write16<N>(Pop16());
+	}
+
 	template <int N> void JP_C_D__2__C_D__2()
 	{
 		auto address = Fetch16();
@@ -633,6 +650,11 @@ private:
 		{
 			PC = address;
 		}
+	}
+
+	template <int N> void JP_C__3()
+	{
+		PC = Fetch16();
 	}
 
 	template <int N> void CALL_C_D__4__C_D__C()
@@ -644,6 +666,11 @@ private:
 		}
 	}
 
+	template <int N> void PUSH_C_F__5()
+	{
+		Push16(b4_5_BC_DE_HL_AF_Read16<N>());
+	}
+	
 	template <int N> void ADD_C_6()
 	{
 		ADD(Fetch8());
@@ -653,6 +680,11 @@ private:
 	{
 		auto isrAddress = b3_5<N>::Value * 8;
 		Call(isrAddress);
+	}
+
+	template <int N> void RET_C__9()
+	{
+		Ret();
 	}
 
 	template <int N> void RLC_CB_0__0_7()
@@ -719,6 +751,12 @@ private:
 		SetFlagValue(FlagBitIndex::Carry, (oldValue & Bit0) != 0);
 	}
 
+	template <int N> void CALL_C__D()
+	{
+		auto address = Fetch16();
+		Call(address);
+	}
+
 	template <int N> void ADC_C__E()
 	{
 		ADC(Fetch8());
@@ -740,25 +778,22 @@ private:
 		SBC(Fetch8());
 	}
 
+	template <int N> void LDH_E__0()
+	{
+		auto displacement = Fetch8();
+		auto address = displacement + 0xFF00;
+		Write8(address, A);
+	}
+
+	template <int N> void LDH_E__2()
+	{
+		auto address = 0xFF00 + C;
+		Write8(address, A);
+	}
+
 	template <int N> void AND_E__6()
 	{
 		AND(Fetch8());
-	}
-
-	template <int N> void JP_E__9()
-	{
-		// Bizarre docs: this is listed as JP (HL), but I'm not sure why there is a dereference around HL since the timing and docs both imply it's just PC = HL
-		PC = HL;
-	}
-
-	template <int N> void XOR_E__E()
-	{
-		XOR(Fetch8());
-	}
-
-	template <int N> void OR_F_6()
-	{
-		OR(Fetch8());
 	}
 
 	template <int N> void ADD_E__8()
@@ -772,6 +807,23 @@ private:
 		SetFlagsForAdd8To16(oldValue, displacement);
 	}
 
+	template <int N> void JP_E__9()
+	{
+		// Bizarre docs: this is listed as JP (HL), but I'm not sure why there is a dereference around HL since the timing and docs both imply it's just PC = HL
+		PC = HL;
+	}
+
+	template <int N> void LDH_E__A()
+	{
+		auto address = Fetch16();
+		Write8(address, A);
+	}
+
+	template <int N> void XOR_E__E()
+	{
+		XOR(Fetch8());
+	}
+
 	template <int N> void LDH_F__0()
 	{
 		auto displacement = Fetch8();
@@ -779,9 +831,20 @@ private:
 		A =	 Read8(address);
 	}
 
+	template <int N> void LDH_F__2()
+	{
+		auto address = 0xFF00 + C;
+		A =	 Read8(address);
+	}
+
 	template <int N> void DI_F__3()
 	{
 		IME = false;
+	}
+
+	template <int N> void OR_F_6()
+	{
+		OR(Fetch8());
 	}
 
 	template <int N> void LDHL_F__8()
@@ -1128,58 +1191,27 @@ private:
 		OPCODE(0xD0, 8, RET_C_D__0__C_D__8)
 		OPCODE(0xD8, 8, RET_C_D__0__C_D__8)
 
-		case 0xC1: // POP ?
-		case 0xD1:
-		case 0xE1:
-		case 0xF1:
-			{
-				instructionCycles = 12;
-				Uint16 value = 0;
-				//@TODO: refactor all these into templates
-				switch ((opcode >> 4) & 0x3)
-				{
-				case 0: BC = Pop16(); break;
-				case 1: DE = Pop16(); break;
-				case 2: HL = Pop16(); break;
-				case 3: AF = Pop16(); break;
-				}
-			}
-			break;
+		OPCODE(0xC1, 12, POP_C_F__1)
+		OPCODE(0xD1, 12, POP_C_F__1)
+		OPCODE(0xE1, 12, POP_C_F__1)
+		OPCODE(0xF1, 12, POP_C_F__1)
 
 		OPCODE(0xC2, 12, JP_C_D__2__C_D__2)
 		OPCODE(0xCA, 12, JP_C_D__2__C_D__2)
 		OPCODE(0xD2, 12, JP_C_D__2__C_D__2)
 		OPCODE(0xDA, 12, JP_C_D__2__C_D__2)
 			
-		case 0xC3: // JP nn
-			{
-				instructionCycles = 12;
-				auto target = Fetch16();
-				PC = target;
-			}
-			break;
+		OPCODE(0xC3, 12, JP_C__3)
 
 		OPCODE(0xC4, 12, CALL_C_D__4__C_D__C)
 		OPCODE(0xD4, 12, CALL_C_D__4__C_D__C)
 		OPCODE(0xCC, 12, CALL_C_D__4__C_D__C)
 		OPCODE(0xDC, 12, CALL_C_D__4__C_D__C)
 
-		case 0xC5: // PUSH ?
-		case 0xD5:
-		case 0xE5:
-		case 0xF5:
-			{
-				instructionCycles = 16;
-				Uint16 value = 0;
-				switch ((opcode >> 4) & 0x3)
-				{
-				case 0: Push16(BC); break;
-				case 1: Push16(DE); break;
-				case 2: Push16(HL); break;
-				case 3: Push16(AF); break;
-				}
-			}
-			break;
+		OPCODE(0xC5, 16, PUSH_C_F__5)
+		OPCODE(0xD5, 16, PUSH_C_F__5)
+		OPCODE(0xE5, 16, PUSH_C_F__5)
+		OPCODE(0xF5, 16, PUSH_C_F__5)
 			
 		OPCODE(0xC6, 8, ADD_C_6)
 
@@ -1192,12 +1224,8 @@ private:
 		OPCODE(0xEF, 32, RST_C_F__7__C_F__F)
 		OPCODE(0xFF, 32, RST_C_F__7__C_F__F)
 
-		case 0xC9: // RET
-			{
-				instructionCycles = 8;
-				Ret();
-			}
-			break;
+		OPCODE(0xC9, 8, RET_C__9)
+
 		case 0xCB: // Extended opcodes
 			{
 				opcode = Fetch8();
@@ -1286,13 +1314,7 @@ private:
 			}
 			break;
 
-		case 0xCD: // CALL nn
-			{
-				instructionCycles = 12;
-				auto address = Fetch16();
-				Call(address);
-			}
-			break;
+		OPCODE(0xCD, 12, CALL_C__D)
 
 		OPCODE(0xCE, 8, ADC_C__E)
 
@@ -1302,37 +1324,28 @@ private:
 		
 		OPCODE(0xDE, 8, SBC_D__E)
 
+		OPCODE(0xE0, 12, LDH_E__0)
+
+		OPCODE(0xE2, 8, LDH_E__2)
+
 		OPCODE(0xE6, 8, AND_E__6)
-
-		OPCODE(0xE9, 4, JP_E__9)
-
-		OPCODE(0xF6, 8, OR_F_6)
-
-		case 0xE0: // LD (0xFF00+n),A
-			{
-				instructionCycles = 12;
-				auto displacement = Fetch8();
-				auto address = displacement + 0xFF00;
-				Write8(address, A);
-			}
-			break;
 
 		OPCODE(0xE8, 16, ADD_E__8)
 
-		OPCODE(0xEE, 8, XOR_E__E)
+		OPCODE(0xE9, 4, JP_E__9)
 
-		case 0xEA: // LD (nn),A
-			{
-				instructionCycles = 16;
-				auto address = Fetch16();
-				Write8(address, A);
-			}
-			break;
+		OPCODE(0xEA, 16, LDH_E__A)
+
+		OPCODE(0xEE, 8, XOR_E__E)
 
 		OPCODE(0xF0, 12, LDH_F__0)
 
+		OPCODE(0xF2, 8, LDH_F__2)
+
 		OPCODE(0xF3, 4, DI_F__3)
 		
+		OPCODE(0xF6, 8, OR_F_6)
+
 		OPCODE(0xF8, 12, LDHL_F__8)
 
 		OPCODE(0xF9, 8, LD_F__9)
