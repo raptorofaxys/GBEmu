@@ -38,9 +38,6 @@ namespace MemoryDeviceStatus
 class MemoryBus
 {
 public:
-	static const int kVramBase = 0x8000;
-	static const int kVramSize = 0x2000;
-
 	static const int kWorkMemoryBase = 0xC000;
 	static const int kWorkMemorySize = 0x2000; // 8k (not supporting CGB switchable mode)
 
@@ -75,7 +72,6 @@ public:
 #undef DEFINE_MEMORY_MAPPED_REGISTER_W
 
 		// Initialize to illegal opcode 0xFD
-		memset(m_vram, 0xFD, sizeof(m_vram));
 		memset(m_workMemory, 0xFD, sizeof(m_workMemory));
 		memset(m_hram, 0xFD, sizeof(m_hram));
 
@@ -112,11 +108,7 @@ public:
 		//	}
 		//}
 
-		if (IsAddressInRange(address, kVramBase, kVramSize))
-		{
-			return m_vram[address - kVramBase];
-		}
-		else if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
+		if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
 		{
 			return m_workMemory[address - kWorkMemoryBase];
 		}
@@ -166,11 +158,7 @@ public:
 		//	}
 		//}
 
-		if (IsAddressInRange(address, kVramBase, kVramSize))
-		{
-			m_vram[address - kVramBase] = value;
-		}
-		else if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
+		if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
 		{
 			m_workMemory[address - kWorkMemoryBase] = value;
 		}
@@ -326,11 +314,8 @@ private:
 	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 
-	int m_deviceIndexAtAddress[kAddressSpaceSize]; // it's good to be in 2014 - this could be much more efficient but there's no need for that right now
+	int m_deviceIndexAtAddress[kAddressSpaceSize]; // it's good to be in 2014 - this could be much more efficient in terms of space but there's no need for that right now
 
-	//std::shared_ptr<Rom> m_pRom;
-	//OperationMode m_mode;
-	Uint8 m_vram[kVramSize];
 	Uint8 m_workMemory[kWorkMemorySize];
 	Uint8 m_hram[kHramMemorySize];
 };

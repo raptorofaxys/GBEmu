@@ -104,6 +104,7 @@
     <ClInclude Include="MemoryMapper.h" />
     <ClInclude Include="Rom.h" />
     <ClInclude Include="RomOnlyMapper.h" />
+    <ClInclude Include="Sound.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="UnusableMemory.h" />
     <ClInclude Include="Utils.h" />
