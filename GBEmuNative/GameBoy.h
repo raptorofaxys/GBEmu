@@ -7,6 +7,7 @@
 #include "Joypad.h"
 #include "GameLinkPort.h"
 #include "Lcd.h"
+#include "Sound.h"
 #include "UnusableMemory.h"
 
 #include "RomOnlyMapper.h"
@@ -44,6 +45,7 @@ public:
 		m_pJoypad.reset(new Joypad(m_pMemory));
 		m_pGameLinkPort.reset(new GameLinkPort());
 		m_pLcd.reset(new Lcd());
+		m_pSound.reset(new Sound());
 		m_pUnusableMemory.reset(new UnusableMemory());
 
 		m_pMemory->AddDevice(m_pMapper);
@@ -51,6 +53,7 @@ public:
 		m_pMemory->AddDevice(m_pJoypad);
 		m_pMemory->AddDevice(m_pGameLinkPort);
 		m_pMemory->AddDevice(m_pLcd);
+		m_pMemory->AddDevice(m_pSound);
 		m_pMemory->AddDevice(m_pUnusableMemory);
 
 		Reset();
@@ -72,6 +75,7 @@ public:
 		m_pTimer->Reset();
 		m_pJoypad->Reset();
 		m_pLcd->Reset();
+		m_pSound->Reset();
 		m_pMapper->Reset();
 
 		//@TODO: initial state
@@ -123,10 +127,12 @@ public:
 
 			m_pTimer->Update(timeSpentOnInstruction);
 			m_pLcd->Update(timeSpentOnInstruction);
+			m_pSound->Update(timeSpentOnInstruction);
 		}
 	}
 
 private:
+	// @TODO: possibly refactor into some kind of system component collection?
 	std::shared_ptr<Rom> m_pRom;
 	std::shared_ptr<MemoryMapper> m_pMapper;
 	std::shared_ptr<MemoryBus> m_pMemory;
@@ -135,6 +141,7 @@ private:
 	std::shared_ptr<Joypad> m_pJoypad;
 	std::shared_ptr<GameLinkPort> m_pGameLinkPort;
 	std::shared_ptr<Lcd> m_pLcd;
+	std::shared_ptr<Sound> m_pSound;
 	std::shared_ptr<UnusableMemory> m_pUnusableMemory;
 
 	float m_totalCyclesExecuted;

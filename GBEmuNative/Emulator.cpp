@@ -27,10 +27,10 @@ int main(int argc, char **argv)
 
 		Janitor j([] { SDL_Quit(); });
 
-		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
+		GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
 		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb");
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
-		GameBoy gb("cpu_instrs\\cpu_instrs.gb");
+		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
 		//GameBoy gb("cpu_instrs\\source\\test.gb");
 		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
 		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
