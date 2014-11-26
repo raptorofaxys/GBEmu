@@ -63,7 +63,9 @@
       <IgnoreSpecificDefaultLibraries>msvcrt</IgnoreSpecificDefaultLibraries>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
+      <Command>echo Copying binaries to workingdir...
+@xcopy /y $(ProjectDir)\external\SDL2-2.0.3\VisualC\SDL\Win32\Release\SDL2.dll $(SolutionDir)\workingdir
+@xcopy /y $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -84,7 +86,9 @@
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
+      <Command>echo Copying binaries to workingdir...
+@xcopy /y $(ProjectDir)\external\SDL2-2.0.3\VisualC\SDL\Win32\Release\SDL2.dll $(SolutionDir)\workingdir
+@xcopy /y $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
