@@ -14,9 +14,12 @@ public:
 		SCY = 0xFF42,	// Scroll Y
 		SCX = 0xFF43,	// Scroll X
 		LY = 0xFF44,	// LCDC Y-coordinate
+		DMA = 0xFF46,	// DMA Transfer and start address
 		BGP = 0xFF47,	// BG palette data
 		OBP0 = 0xFF48,	// Object palette 0 data
 		OBP1 = 0xFF49,	// Object palette 1 data
+		WY = 0xFF4A,	// Window Y position
+		WX = 0xFF4B,	// WIndow X position minus 7
 	};
 
 	enum class State
@@ -33,7 +36,8 @@ public:
 	static const int kOamBase = 0xFE00;
 	static const int kOamSize = 0xFE9F - kOamBase + 1;
 
-	Lcd()
+	Lcd(const std::shared_ptr<MemoryBus>& memory)
+		: m_pMemory(memory)
 	{
 		Reset();
 	}
@@ -52,9 +56,12 @@ public:
 		SCY = 0;
 		SCX = 0;
 		LY = 0;
+		DMA = 0;
 		BGP = 0;
 		OBP0 = 0;
 		OBP1 = 0;
+		WY = 0;
+		WX = 0;
 	}
 
 	void Update(float seconds)
@@ -160,9 +167,32 @@ public:
 					return true;
 				}
 
+			case Registers::DMA:
+				{
+					if (requestType == MemoryRequestType::Write)
+					{
+						auto dmaSourceAddress = value << 8;
+						auto dmaDestinationAddress = 0xFE00;
+
+						for ( ; dmaDestinationAddress <= 0xFE9F; ++dmaSourceAddress, ++dmaDestinationAddress)
+						{
+							m_pMemory->Write8(dmaDestinationAddress, m_pMemory->Read8(dmaSourceAddress));
+						}
+						//@TODO: DMA transfer time emulation
+					}
+					else
+					{
+						value = 0;
+					}
+					return true;
+				}
+				break;
+
 			SERVICE_MMR_RW(BGP)
 			SERVICE_MMR_RW(OBP0)
 			SERVICE_MMR_RW(OBP1)
+			SERVICE_MMR_RW(WY)
+			SERVICE_MMR_RW(WX)
 			}
 		}
 	
@@ -181,7 +211,12 @@ private:
 	Uint8 SCY;
 	Uint8 SCX;
 	Uint8 LY;
+	Uint8 DMA;
 	Uint8 BGP;
 	Uint8 OBP0;
 	Uint8 OBP1;
+	Uint8 WY;
+	Uint8 WX;
+
+	std::shared_ptr<MemoryBus> m_pMemory;
 };

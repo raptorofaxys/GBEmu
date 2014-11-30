@@ -16,6 +16,7 @@ int main(int argc, char **argv)
 {
 	try
 	{
+		//@TODO: change targetname per configuration
 		ProcessConsole console;
 
 		SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);

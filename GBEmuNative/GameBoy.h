@@ -44,7 +44,7 @@ public:
 		m_pTimer.reset(new Timer(m_pMemory));
 		m_pJoypad.reset(new Joypad(m_pMemory));
 		m_pGameLinkPort.reset(new GameLinkPort());
-		m_pLcd.reset(new Lcd());
+		m_pLcd.reset(new Lcd(m_pMemory));
 		m_pSound.reset(new Sound());
 		m_pUnusableMemory.reset(new UnusableMemory());
 
