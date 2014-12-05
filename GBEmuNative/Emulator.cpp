@@ -28,7 +28,20 @@ int main(int argc, char **argv)
 
 		Janitor j([] { SDL_Quit(); });
 
-		GameBoy gb("Tetris (JUE) (V1.1) [!].gb");
+		std::shared_ptr<SDL_Window> pWindow(SDL_CreateWindow("GBEmu", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Lcd::kScreenWidth * 4, Lcd::kScreenHeight * 4, 0), SDL_DestroyWindow);
+
+		if (!pWindow)
+		{
+			throw Exception("Couldn't create window");
+		}
+		
+		std::shared_ptr<SDL_Renderer> pRenderer(SDL_CreateRenderer(pWindow.get(), -1, 0), SDL_DestroyRenderer);
+		if (!pRenderer)
+		{
+			throw Exception("Couldn't create renderer");
+		}
+
+		GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb");
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
 		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
@@ -45,25 +58,7 @@ int main(int argc, char **argv)
 		//GameBoy gb("cpu_instrs\\individual\\10-bit ops.gb"); // missing CB 40
 		//GameBoy gb("cpu_instrs\\individual\\11-op a,(hl).gb"); // missing CB 46
 		const auto& gameName = gb.GetRom().GetRomName();
-
-		std::shared_ptr<SDL_Window> pWindow(SDL_CreateWindow(gameName.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, GameBoy::kScreenWidth * 4, GameBoy::kScreenHeight * 4, 0), SDL_DestroyWindow);
-
-		if (!pWindow)
-		{
-			throw Exception("Couldn't create window");
-		}
-		
-		std::shared_ptr<SDL_Renderer> pRenderer(SDL_CreateRenderer(pWindow.get(), -1, 0), SDL_DestroyRenderer);
-		if (!pRenderer)
-		{
-			throw Exception("Couldn't create renderer");
-		}
-
-		std::shared_ptr<SDL_Texture> pFrameBuffer(SDL_CreateTexture(pRenderer.get(), SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, GameBoy::kScreenWidth, GameBoy::kScreenHeight), SDL_DestroyTexture);
-		if (!pRenderer)
-		{
-			throw Exception("Couldn't create framebuffer texture");
-		}
+		SDL_SetWindowTitle(pWindow.get(), gameName.c_str());
 
 		bool done = false;
 
@@ -79,12 +74,21 @@ int main(int argc, char **argv)
 			{
 		        switch (event.type)
 				{
-		        case SDL_KEYDOWN:
-		            if (event.key.keysym.sym == SDLK_ESCAPE)
+				case SDL_KEYDOWN:
 					{
-		                done = true;
-		            }
-		            break;
+						switch (event.key.keysym.sym)
+						{
+						case SDLK_ESCAPE:
+							done = true;
+							break;
+						case SDLK_s:
+							gb.Step();
+							break;
+						case SDLK_g:
+							gb.Go();
+						}
+					}
+					break;
 		        case SDL_QUIT:
 		            done = true;
 		            break;
@@ -101,6 +105,7 @@ int main(int argc, char **argv)
 			averageSeconds = (averageSeconds > 0.0f) ? (averageSeconds * (1.0f - averagingRate) + (seconds * averagingRate)) : seconds;
 			if (ticks - lastPrintTicks > 1000)
 			{
+				SDL_SetWindowTitle(pWindow.get(), Format("%s - %3.1f FPS", gameName.c_str(), 1.0f / averageSeconds).c_str());
 				//printf("%3.1f FPS\n", 1.0f / averageSeconds);
 				lastPrintTicks = ticks;
 			}
@@ -108,16 +113,8 @@ int main(int argc, char **argv)
 			gb.Update(seconds);
 			lastTicks = ticks;
 
-			// Set a random color
-			void* pPixels;
-			int pitch;
-			SDL_LockTexture(pFrameBuffer.get(), NULL, &pPixels, &pitch);
-			Uint32* pARGB = static_cast<Uint32*>(pPixels);
-			*pARGB = rand() * rand();
-			SDL_UnlockTexture(pFrameBuffer.get());
-
 		    SDL_RenderClear(pRenderer.get());
-		    SDL_RenderCopy(pRenderer.get(), pFrameBuffer.get(), NULL, NULL);
+		    SDL_RenderCopy(pRenderer.get(), gb.GetFrameBufferTexture(), NULL, NULL);
 		    SDL_RenderPresent(pRenderer.get());
 		}
 	}

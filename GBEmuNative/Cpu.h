@@ -908,7 +908,8 @@ private:
 
 	void TraceLog(const std::string& message)
 	{
-		m_traceLog += message;
+		//m_traceLog += message;
+		printf("%s", message.c_str());
 	}
 
 	void DebugOpcode(Uint8 opcode)

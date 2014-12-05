@@ -16,17 +16,20 @@
 class GameBoy
 {
 public:
-	static const int kScreenWidth = 160;
-	static const int kScreenHeight = 144;
-
 	enum class DebuggerState
 	{
 		Running,
 		SingleStepping
 	};
 
-	GameBoy(const char* pFileName)
+	GameBoy(const char* pFileName, SDL_Renderer* pRenderer)
 	{
+		m_pFrameBuffer.reset(SDL_CreateTexture(pRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Lcd::kScreenWidth, Lcd::kScreenHeight), SDL_DestroyTexture);
+		if (!pRenderer)
+		{
+			throw Exception("Couldn't create framebuffer texture");
+		}
+
 		m_pRom.reset(new Rom(pFileName));
 
 		auto cartridgeType = m_pRom->GetCartridgeType();
@@ -44,7 +47,7 @@ public:
 		m_pTimer.reset(new Timer(m_pMemory));
 		m_pJoypad.reset(new Joypad(m_pMemory));
 		m_pGameLinkPort.reset(new GameLinkPort());
-		m_pLcd.reset(new Lcd(m_pMemory));
+		m_pLcd.reset(new Lcd(m_pMemory, m_pFrameBuffer));
 		m_pSound.reset(new Sound());
 		m_pUnusableMemory.reset(new UnusableMemory());
 
@@ -62,6 +65,11 @@ public:
 	const Rom& GetRom() const
 	{
 		return *m_pRom;
+	}
+
+	SDL_Texture* GetFrameBufferTexture() const
+	{
+		return m_pFrameBuffer.get();
 	}
 
 	void Reset()
@@ -83,39 +91,47 @@ public:
 		//m_pMemory->TIMA = 0;
 	}
 
+	void ToggleStepping()
+	{
+		if (m_debuggerState == DebuggerState::SingleStepping)
+		{
+			m_debuggerState = DebuggerState::Running;
+		}
+		else
+		{
+			m_debuggerState = DebuggerState::SingleStepping;
+		}
+	}
+
+	void Step()
+	{
+		m_debuggerState = DebuggerState::SingleStepping;
+		m_cyclesRemaining = 1;
+	}
+
+	void Go()
+	{
+		m_debuggerState = DebuggerState::Running;
+	}
+
 	void Update(float seconds)
 	{
+		if (m_debuggerState == DebuggerState::SingleStepping)
+		{
+			// Only advance time when user wishes to do so
+			seconds = 0.0f;
+		}
+
 		// CPU cycles are counted here, and not in the CPU, because they are the atom of emulator execution
 		m_cyclesRemaining += seconds * Cpu::kCyclesPerSecond;
 	
-		float timePerClockCycle = 1.0f / Cpu::kCyclesPerSecond;
+		const float timePerClockCycle = 1.0f / Cpu::kCyclesPerSecond;
 
 		while (m_cyclesRemaining > 0)
 		{
-			//if (m_totalCyclesExecuted > Cpu::kCyclesPerSecond)
-			//{
-			//	printf("%f cycles executed TIMA: %d\n", m_totalCyclesExecuted, m_pMemory->TIMA);
-			//}
-
 			m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
 			//m_pCpu->SetTraceEnabled(true);
 			m_pCpu->DebugNextOpcode();
-
-			SDL_Keycode keycode = SDLK_UNKNOWN;
-			if (m_debuggerState == DebuggerState::SingleStepping)
-			{
-				keycode = DebugWaitForKeypress();
-			}
-			else
-			{
-				keycode = DebugCheckForKeypress();
-			}
-
-			switch (keycode)
-			{
-			case SDLK_g: m_debuggerState = DebuggerState::Running; break;
-			case SDLK_s: m_debuggerState = DebuggerState::SingleStepping; break;
-			}
 
 			auto instructionCycles = m_pCpu->ExecuteSingleInstruction();
 			//auto instructionCycles = 4;
@@ -129,6 +145,8 @@ public:
 			m_pLcd->Update(timeSpentOnInstruction);
 			m_pSound->Update(timeSpentOnInstruction);
 		}
+
+		//@TODO: synchronize updates to LCD controller vblanks to avoid tearing
 	}
 
 private:
@@ -147,4 +165,6 @@ private:
 	float m_totalCyclesExecuted;
 	float m_cyclesRemaining;
 	DebuggerState m_debuggerState;
+
+	std::shared_ptr<SDL_Texture> m_pFrameBuffer;
 };

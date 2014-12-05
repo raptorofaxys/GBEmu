@@ -38,8 +38,8 @@ inline bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
 
 // WARNING: the following functions eat up all events
 //@TODO: get rid of this, it screws up other event processing
-SDL_Keycode DebugCheckForKeypress();
-SDL_Keycode DebugWaitForKeypress();
+//SDL_Keycode DebugCheckForKeypress();
+//SDL_Keycode DebugWaitForKeypress();
 
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
 std::shared_ptr<std::vector<Uint8>> LoadFileAsByteArray(const char* pFileName);
