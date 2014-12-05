@@ -44,14 +44,15 @@ public:
 
 		m_pMemory.reset(new MemoryBus());
 		m_pCpu.reset(new Cpu(m_pMemory));
-		m_pTimer.reset(new Timer(m_pMemory));
-		m_pJoypad.reset(new Joypad(m_pMemory));
+		m_pTimer.reset(new Timer(m_pMemory, m_pCpu));
+		m_pJoypad.reset(new Joypad(m_pMemory, m_pCpu));
 		m_pGameLinkPort.reset(new GameLinkPort());
-		m_pLcd.reset(new Lcd(m_pMemory, m_pFrameBuffer));
+		m_pLcd.reset(new Lcd(m_pMemory, m_pCpu, m_pFrameBuffer));
 		m_pSound.reset(new Sound());
 		m_pUnusableMemory.reset(new UnusableMemory());
 
 		m_pMemory->AddDevice(m_pMapper);
+		m_pMemory->AddDevice(m_pCpu);
 		m_pMemory->AddDevice(m_pTimer);
 		m_pMemory->AddDevice(m_pJoypad);
 		m_pMemory->AddDevice(m_pGameLinkPort);

@@ -41,10 +41,10 @@ int main(int argc, char **argv)
 			throw Exception("Couldn't create renderer");
 		}
 
-		GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
-		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb");
+		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
+		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
-		//GameBoy gb("cpu_instrs\\cpu_instrs.gb");
+		GameBoy gb("cpu_instrs\\cpu_instrs.gb", pRenderer.get());
 		//GameBoy gb("cpu_instrs\\source\\test.gb");
 		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
 		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");

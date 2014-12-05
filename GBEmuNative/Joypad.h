@@ -11,9 +11,9 @@ public:
 		P1_JOYP = 0xFF00, // Joypad
 	};
 
-	Joypad(const std::shared_ptr<MemoryBus>& memory)
+	Joypad(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu)
 		: m_pMemory(memory)
-		, IF(memory->IF) //@TODO: possibly replace with access to CPU (or whatever memory bus device winds up servicing IF requests)
+		, m_pCpu(cpu)
 	{
 		Reset();
 	}
@@ -52,7 +52,7 @@ public:
 	}
 
 	Uint8 P1_JOYP;
-	Uint8& IF;
 private:
 	std::shared_ptr<MemoryBus> m_pMemory;
+	std::shared_ptr<Cpu> m_pCpu;
 };

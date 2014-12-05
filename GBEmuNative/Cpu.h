@@ -26,15 +26,20 @@ namespace FlagBitMask
 	};
 }
 
-class Cpu
+class Cpu : public IMemoryBusDevice
 {
 public:
 	static Uint32 const kCyclesPerSecond = 4194304;
 
+	enum class Registers
+	{
+		IF = 0xFF0F,	// Interrupt flag
+		KEY1 = 0xFF4D,	// CGB only: prepare speed switch
+		IE = 0xFFFF,	// Interrupt enable
+	};
+
 	Cpu(const std::shared_ptr<MemoryBus>& memory)
 		: m_pMemory(memory)
-		, IE(memory->IE)
-		, IF(memory->IF)
 //		, m_pTraceLog(nullptr)
 	{
 		Reset();
@@ -56,12 +61,21 @@ public:
 
 		IME = true;
 
+		IF = 0;
+		KEY1 = 0;
+		IE = 0;
+
 		static_assert(offsetof(Cpu, F) == offsetof(Cpu, AF), "Target machine is not little-endian; register unions must be revised");
 		PC = 0x0100;
 		AF = 0x01B0;
 		BC = 0x0013;
 		DE = 0x00D8;
 		HL = 0x014D;
+	}
+
+	void SignalInterrupt(Uint8 interruptFlagMask)
+	{
+		IF |= interruptFlagMask;
 	}
 
 	void DebugNextOpcode()
@@ -908,8 +922,8 @@ private:
 
 	void TraceLog(const std::string& message)
 	{
-		//m_traceLog += message;
-		printf("%s", message.c_str());
+		m_traceLog += message;
+		//printf("%s", message.c_str());
 	}
 
 	void DebugOpcode(Uint8 opcode)
@@ -1602,6 +1616,19 @@ private:
 
 		return instructionCycles;
 	}
+
+	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
+	{
+		switch (address)
+		{
+			SERVICE_MMR_RW(IF)
+			SERVICE_MMR_RW(KEY1)
+			SERVICE_MMR_RW(IE)
+		}
+
+		return false;
+	}
+
 private:
 	///////////////////////////////////////////////////////////////////////////
 	// MemoryBus access
@@ -1812,8 +1839,9 @@ private:
 	Uint16 PC;
 	bool IME; // whether interrupts are enabled - very special register, not memory-mapped
 
-	Uint8& IE;
-	Uint8& IF;
+	Uint8 IF;
+	Uint8 KEY1;
+	Uint8 IE;
 
 	bool m_cpuHalted;
 	bool m_cpuStopped;

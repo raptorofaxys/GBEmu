@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IMemoryBusDevice.h"
+#include "Cpu.h"
 
 class Timer : public IMemoryBusDevice
 {
@@ -15,9 +16,9 @@ public:
 
 	static int const kDivFrequency = 16384;
 
-	Timer(const std::shared_ptr<MemoryBus>& memory)
+	Timer(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu)
 		: m_pMemory(memory)
-		, IF(memory->IF) //@TODO: possibly replace with access to CPU (or whatever memory bus device winds up servicing IF requests)
+		, m_pCpu(cpu)
 	{
 		Reset();
 	}
@@ -60,7 +61,7 @@ public:
 				if (TIMA == 0xFF)
 				{
 					TIMA = TMA;
-					IF |= Bit2; // Request timer interrupt
+					m_pCpu->SignalInterrupt(Bit2);
 				}
 				++TIMA;
 				m_TimaTicksRemaining -= 1.0f;
@@ -97,9 +98,9 @@ public:
 	Uint8 TIMA;
 	Uint8 TMA;
 	Uint8 TAC;
-	Uint8& IF;
 private:
 	std::shared_ptr<MemoryBus> m_pMemory;
+	std::shared_ptr<Cpu> m_pCpu;
 	float m_DivTicksRemaining;
 	float m_TimaTicksRemaining;
 };

@@ -1,4 +1,1 @@
-DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF0F, IF)	// Interrupt flag
-DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF4D, KEY1)	// CGB only: prepare speed switch
 DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFF7F, UNKNOWN)	// Tetris writes here, no documented function
-DEFINE_MEMORY_MAPPED_REGISTER_RW(0xFFFF, IE)	// Interrupt enable

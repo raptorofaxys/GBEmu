@@ -252,7 +252,7 @@ private:
 	Uint8 ReadMemoryMappedRegister(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
 	{
 		breakOnRegisterAccess = true;
-		breakRegister = static_cast<Uint16>(MemoryMappedRegisters::IF);
+		//breakRegister = static_cast<Uint16>(MemoryMappedRegisters::IF);
 
 		if (breakOnRegisterAccess && (address == breakRegister))
 		{

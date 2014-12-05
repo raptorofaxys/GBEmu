@@ -14,6 +14,7 @@ public:
 		SCY = 0xFF42,	// Scroll Y
 		SCX = 0xFF43,	// Scroll X
 		LY = 0xFF44,	// LCDC Y-coordinate
+		LYC = 0xFF45,	// LY compare
 		DMA = 0xFF46,	// DMA Transfer and start address
 		BGP = 0xFF47,	// BG palette data
 		OBP0 = 0xFF48,	// Object palette 0 data
@@ -39,9 +40,10 @@ public:
 	static const int kOamBase = 0xFE00;
 	static const int kOamSize = 0xFE9F - kOamBase + 1;
 
-	Lcd(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<SDL_Texture>& pFrameBuffer)
+	Lcd(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu, const std::shared_ptr<SDL_Texture>& pFrameBuffer)
 		: m_pMemory(memory)
 		, m_pMemoryUnsafe(memory.get())
+		, m_pCpu(cpu)
 		, m_pFrameBuffer(pFrameBuffer)
 	{
 		//@TODO SDL_QueryTexture
@@ -63,6 +65,7 @@ public:
 		SCY = 0;
 		SCX = 0;
 		LY = 0;
+		LYC = 0;
 		DMA = 0;
 		BGP = 0xFC;
 		OBP0 = 0xFF;
@@ -86,6 +89,30 @@ public:
 					++m_scanLine;
 					++LY;
 
+					if (LY == LYC)
+					{
+						if (STAT & Bit6)
+						{
+							m_pCpu->SignalInterrupt(Bit1);
+						}
+
+						STAT |= Bit2;
+					}
+					else
+					{
+						STAT &= ~Bit2;
+					}
+
+					if (STAT & Bit5)
+					{
+						m_pCpu->SignalInterrupt(Bit1);
+					}
+
+					if ((STAT & Bit4) && (m_scanLine == 144))
+					{
+						m_pCpu->SignalInterrupt(Bit0);
+					}
+
 					if (m_scanLine > 153)
 					{
 						m_scanLine = 0;
@@ -108,6 +135,11 @@ public:
 				break;
 			case State::HBlank:
 				{
+					if (STAT & Bit3)
+					{
+						m_pCpu->SignalInterrupt(Bit1);
+					}
+
 					m_updateTimeLeft -= 0.0000486f;
 					mode = 0;
 					m_nextState = State::ReadingOam;
@@ -194,6 +226,7 @@ public:
 					Uint8 tileRowMsb = (m_pMemoryUnsafe->Read8(tileDataAddress + 1) & tileDataMask) >> tileDataShift;
 
 					Uint8 colorIndex = (tileRowMsb << 1) | tileRowLsb;
+					//colorIndex = rand() % 4;
 
 					// Translate the color index to an actual color using the palette registers
 					Uint8 shadeShift = 2 * colorIndex;
@@ -258,10 +291,6 @@ public:
 					{
 						// Bits 3-6 are read/write, bits 0-2 are read-only
 						STAT = (value & (Bit6 | Bit5 | Bit4 | Bit3)) | (STAT & (Bit2 | Bit1 | Bit0));
-						//@TODO: coincidence interrupt
-						//@TODO: OAM interrupt
-						//@TODO: vblank interrupt
-						//@TODO: hblank interrupt
 					}
 					return true;
 				}
@@ -281,6 +310,8 @@ public:
 					}
 					return true;
 				}
+
+			SERVICE_MMR_RW(LYC)
 
 			case Registers::DMA:
 				{
@@ -326,6 +357,7 @@ private:
 	Uint8 SCY;
 	Uint8 SCX;
 	Uint8 LY;
+	Uint8 LYC;
 	Uint8 DMA;
 	Uint8 BGP;
 	Uint8 OBP0;
@@ -335,5 +367,6 @@ private:
 
 	std::shared_ptr<MemoryBus> m_pMemory;
 	MemoryBus* m_pMemoryUnsafe;
+	std::shared_ptr<Cpu> m_pCpu;
 	std::shared_ptr<SDL_Texture> m_pFrameBuffer;
 };
