@@ -56,6 +56,9 @@ public:
 		m_updateTimeLeft = 0.0f;
 		m_nextState = State::ReadingOam;
 		m_scanLine = 0;
+		m_wasLcdEnabledLastUpdate = true;
+
+		RenderDisabledFrameBuffer();
 
 		memset(m_vram, 0xFD, sizeof(m_vram));
 		memset(m_oam, 0xFD, sizeof(m_oam));
@@ -82,80 +85,123 @@ public:
 		while (m_updateTimeLeft > 0.0f)
 		{
 			int mode = 0;
-			switch (m_nextState)
+			bool isLcdEnabled = (LCDC & Bit7) != 0;
+			if (isLcdEnabled)
 			{
-			case State::ReadingOam:
+				switch (m_nextState)
 				{
-					++m_scanLine;
-					++LY;
-
-					if (LY == LYC)
+				case State::ReadingOam:
 					{
-						if (STAT & Bit6)
+						++m_scanLine;
+						++LY;
+
+						if (LY == LYC)
+						{
+							if (STAT & Bit6)
+							{
+								m_pCpu->SignalInterrupt(Bit1);
+							}
+
+							STAT |= Bit2;
+						}
+						else
+						{
+							STAT &= ~Bit2;
+						}
+
+						if (STAT & Bit5)
 						{
 							m_pCpu->SignalInterrupt(Bit1);
 						}
 
-						STAT |= Bit2;
+						if ((STAT & Bit4) && (m_scanLine == 144))
+						{
+							m_pCpu->SignalInterrupt(Bit0);
+						}
+
+						if (m_scanLine > 153)
+						{
+							m_scanLine = 0;
+							LY = 0;
+						}
+
+						RenderScanline();
+
+						m_updateTimeLeft -= 0.000019f;
+						mode = 2;
+						m_nextState = State::ReadingOamAndVram;
 					}
-					else
+					break;
+				case State::ReadingOamAndVram:
 					{
-						STAT &= ~Bit2;
+						m_updateTimeLeft -= 0.000041f;
+						mode = 3;
+						m_nextState = State::HBlank;
 					}
-
-					if (STAT & Bit5)
+					break;
+				case State::HBlank:
 					{
-						m_pCpu->SignalInterrupt(Bit1);
+						if (STAT & Bit3)
+						{
+							m_pCpu->SignalInterrupt(Bit1);
+						}
+
+						m_updateTimeLeft -= 0.0000486f;
+						mode = 0;
+						m_nextState = State::ReadingOam;
 					}
-
-					if ((STAT & Bit4) && (m_scanLine == 144))
-					{
-						m_pCpu->SignalInterrupt(Bit0);
-					}
-
-					if (m_scanLine > 153)
-					{
-						m_scanLine = 0;
-						LY = 0;
-					}
-
-					RenderScanline();
-
-					m_updateTimeLeft -= 0.000019f;
-					mode = 2;
-					m_nextState = State::ReadingOamAndVram;
+					break;
 				}
-				break;
-			case State::ReadingOamAndVram:
+
+				if (m_scanLine >= 144)
 				{
-					m_updateTimeLeft -= 0.000041f;
-					mode = 3;
-					m_nextState = State::HBlank;
+					// Vblank
+					mode = 1;
 				}
-				break;
-			case State::HBlank:
-				{
-					if (STAT & Bit3)
-					{
-						m_pCpu->SignalInterrupt(Bit1);
-					}
-
-					m_updateTimeLeft -= 0.0000486f;
-					mode = 0;
-					m_nextState = State::ReadingOam;
-				}
-				break;
 			}
-
-			if (m_scanLine >= 144)
+			else
 			{
-				// Vblank
+				// LCD is disabled
 				mode = 1;
+				m_updateTimeLeft = 0.0f;
+				m_scanLine = -1;
+				m_nextState = State::ReadingOam;
 			}
+
+			if (m_wasLcdEnabledLastUpdate && !isLcdEnabled)
+			{
+				RenderDisabledFrameBuffer();
+			}
+			m_wasLcdEnabledLastUpdate = isLcdEnabled;
 
 			// Mode is the lower two bits of the STAT register
 			STAT = (STAT & ~(Bit1 | Bit0)) | (mode);
 		}
+	}
+
+	void RenderDisabledFrameBuffer()
+	{
+		void* pVoidPixels;
+		int pitch;
+		SDL_LockTexture(m_pFrameBuffer.get(), NULL, &pVoidPixels, &pitch);
+
+		char* pPixels = reinterpret_cast<char*>(pVoidPixels);
+
+		//@TODO: replace with a memset or something, but in the meantime this allows for patterns to help debugging
+		for (Sint16 x = 0; x < kScreenWidth; ++x)
+		{
+			for (Sint16 y = 0; y < kScreenHeight; ++y)
+			{
+				Uint32* pARGB = reinterpret_cast<Uint32*>(pPixels + y * pitch + x * 4);
+				
+				Uint8 r = 0xFF;
+				Uint8 g = 0x00;
+				Uint8 b = 0xFF;
+				*pARGB = 0xFF000000 | (r << 16) | (g << 8) | b;
+			}
+		}
+		
+		SDL_UnlockTexture(m_pFrameBuffer.get());
 	}
 
 	void RenderScanline()
@@ -241,14 +287,14 @@ public:
 				}
 
 				//*pARGB = 0xFF000000 | (0xFF << ((c % 3) * 8));
-				if (!(LCDC & Bit7))
-				{
-					// Display is off
-					r = 0xFF;
-					g = 0;
-					//g = 0xFF;
-					b = 0xFF;
-				}
+				//if (!(LCDC & Bit7))
+				//{
+				//	// Display is off
+				//	r = 0xFF;
+				//	g = 0;
+				//	//g = 0xFF;
+				//	b = 0xFF;
+				//}
 
 				*pARGB = 0xFF000000 | (r << 16) | (g << 8) | b;
 
@@ -348,6 +394,7 @@ private:
 	float m_updateTimeLeft;
 	State m_nextState;
 	int m_scanLine;
+	bool m_wasLcdEnabledLastUpdate;
 
 	Uint8 m_vram[kVramSize];
 	Uint8 m_oam[kOamSize];
