@@ -71,10 +71,8 @@
     <ClInclude Include="Sound.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="MemoryMappedRegisters.inc">
+    <ClInclude Include="UnknownMemoryMappedRegisters.h">
       <Filter>Header Files</Filter>
-    </None>
+    </ClInclude>
   </ItemGroup>
 </Project>

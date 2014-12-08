@@ -9,6 +9,7 @@
 #include "Lcd.h"
 #include "Sound.h"
 #include "UnusableMemory.h"
+#include "UnknownMemoryMappedRegisters.h"
 
 #include "RomOnlyMapper.h"
 #include "Mbc1Mapper.h"
@@ -50,6 +51,7 @@ public:
 		m_pLcd.reset(new Lcd(m_pMemory, m_pCpu, m_pFrameBuffer));
 		m_pSound.reset(new Sound());
 		m_pUnusableMemory.reset(new UnusableMemory());
+		m_pUnknownMemoryMappedRegisters.reset(new UnknownMemoryMappedRegisters());
 
 		m_pMemory->AddDevice(m_pMapper);
 		m_pMemory->AddDevice(m_pCpu);
@@ -59,6 +61,7 @@ public:
 		m_pMemory->AddDevice(m_pLcd);
 		m_pMemory->AddDevice(m_pSound);
 		m_pMemory->AddDevice(m_pUnusableMemory);
+		m_pMemory->AddDevice(m_pUnknownMemoryMappedRegisters);
 
 		Reset();
 	}
@@ -168,6 +171,7 @@ private:
 	std::shared_ptr<Lcd> m_pLcd;
 	std::shared_ptr<Sound> m_pSound;
 	std::shared_ptr<UnusableMemory> m_pUnusableMemory;
+	std::shared_ptr<UnknownMemoryMappedRegisters> m_pUnknownMemoryMappedRegisters;
 
 	float m_totalCyclesExecuted;
 	float m_cyclesRemaining;

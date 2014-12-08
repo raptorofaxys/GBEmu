@@ -26,6 +26,8 @@ namespace FlagBitMask
 	};
 }
 
+//class OpcodeTestMemoryBus
+
 class Cpu : public IMemoryBusDevice
 {
 public:
@@ -938,8 +940,6 @@ private:
 		if (m_traceEnabled)
 		{
 			//SetForegroundConsoleColor();
-
-			//
 
 			static const char* opcodeMnemonics[256] =
 			{

@@ -110,11 +110,9 @@
     <ClInclude Include="RomOnlyMapper.h" />
     <ClInclude Include="Sound.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="UnknownMemoryMappedRegisters.h" />
     <ClInclude Include="UnusableMemory.h" />
     <ClInclude Include="Utils.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="MemoryMappedRegisters.inc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

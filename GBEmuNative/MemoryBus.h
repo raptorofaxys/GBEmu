@@ -8,23 +8,7 @@
 #include <memory>
 #include <vector>
 
-//class Mapper
-
 extern float g_totalCyclesExecuted;
-
-#define MMR_NAME(x) x
-
-// Define memory addresses for all the memory-mapped registers
-enum class MemoryMappedRegisters
-{
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) name = addx,
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) name = addx,
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) name = addx,
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-};
 
 namespace MemoryDeviceStatus
 {
@@ -63,14 +47,6 @@ public:
 
 	void Reset()
 	{
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) MMR_NAME(name) = 0x00;
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) MMR_NAME(name) = 0x00;
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) MMR_NAME(name) = 0x00;
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-
 		// Initialize to illegal opcode 0xFD
 		memset(m_workMemory, 0xFD, sizeof(m_workMemory));
 		memset(m_hram, 0xFD, sizeof(m_hram));
@@ -87,26 +63,6 @@ public:
 		{
 			*pSuccess = true;
 		}
-
-		// very fast
-		//if (m_devicesUnsafe[0]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
-		//if (m_devicesUnsafe[1]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
-
-		//for (const auto& pDevice: m_devicesUnsafe) // extremely slow(300-400x slower) in debug, even with iterator debugging turned off
-		//for (size_t i = 0; i < m_devicesUnsafe.size(); ++i) // 10-12x slower
-
-		// About the same speed as the range-based for in release
-		//@OPTIMIZE: cache which device is used for which address, either on first access or once for all address at the start.  Then prevent calls to AddDevice.
-		//@TODO: can even verify that exactly one device handles each address, to make sure there are no overlapping ranges being handled
-		//auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
-		//for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
-		//{
-		//	//const auto& pDevice = m_devicesUnsafe[i];
-		//	if ((*ppDevice)->HandleRequest(MemoryRequestType::Read, address, result))
-		//	{
-		//		return result;
-		//	}
-		//}
 
 		if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
 		{
@@ -131,7 +87,15 @@ public:
 				return result;
 			}
 
-			return ReadMemoryMappedRegister(address, throwIfFailed, pSuccess);
+			if (throwIfFailed)
+			{
+				throw NotImplementedException();
+			}
+			if (pSuccess)
+			{
+				*pSuccess = false;
+			}
+			return 0xFF;
 		}
 	}
 	
@@ -150,14 +114,6 @@ public:
 
 	void Write8(Uint16 address, Uint8 value)
 	{
-		//for (const auto& pDevice: m_devices)
-		//{
-		//	if (pDevice->HandleRequest(MemoryRequestType::Write, address, value))
-		//	{
-		//		return;
-		//	}
-		//}
-
 		if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
 		{
 			m_workMemory[address - kWorkMemoryBase] = value;
@@ -180,7 +136,7 @@ public:
 				return;
 			}
 
-			WriteMemoryMappedRegister(address, value);
+			throw NotImplementedException();
 		}
 	}
 
@@ -189,15 +145,6 @@ public:
 		Write8(address, GetLow8(value));
 		Write8(address + 1, GetHigh8(value));
 	}
-
-	// Declare storage for all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) Uint8 MMR_NAME(name);
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) Uint8 MMR_NAME(name);
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) Uint8 MMR_NAME(name);
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
 
 private:
 
@@ -249,68 +196,6 @@ private:
 		}
 	}
 
-	Uint8 ReadMemoryMappedRegister(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
-	{
-		breakOnRegisterAccess = true;
-		//breakRegister = static_cast<Uint16>(MemoryMappedRegisters::IF);
-
-		if (breakOnRegisterAccess && (address == breakRegister))
-		{
-			//printf("Read 0x%04lX @ %f c (TIMA = %d)\n", address, g_totalCyclesExecuted, TIMA);
-			int x = 3;
-		}
-
-		if (pSuccess)
-		{
-			*pSuccess = true;
-		}
-			
-		switch (address)
-		{
-			// Handle reads to all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: return MMR_NAME(name);
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: return MMR_NAME(name);
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) case MemoryMappedRegisters::name: if (throwIfFailed) { throw Exception("Read from write-only register"); } if (pSuccess) { *pSuccess = false; } return 0xFF;
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-		default:
-			if (throwIfFailed)
-			{
-				throw NotImplementedException();
-			}
-			if (pSuccess)
-			{
-				*pSuccess = false;
-			}
-			return 0xFF;
-		}
-	}
-
-	void WriteMemoryMappedRegister(Uint16 address, Uint8 value)
-	{
-		if (breakOnRegisterAccess && (address == breakRegister))
-		{
-			//printf("Write 0x%04lX: %d @ %f c (TIMA = %d)\n", address, value, g_totalCyclesExecuted, TIMA);
-			int x = 3;
-		}
-
-		switch (address)
-		{
-			// Handle writes to all the memory-mapped registers
-#define DEFINE_MEMORY_MAPPED_REGISTER_RW(addx, name) case MemoryMappedRegisters::name: MMR_NAME(name) = value; break;
-#define DEFINE_MEMORY_MAPPED_REGISTER_R(addx, name) case MemoryMappedRegisters::name: throw Exception("Write to read-only register"); break;
-#define DEFINE_MEMORY_MAPPED_REGISTER_W(addx, name) case MemoryMappedRegisters::name: MMR_NAME(name) = value; break;
-#include "MemoryMappedRegisters.inc"
-#undef DEFINE_MEMORY_MAPPED_REGISTER_RW
-#undef DEFINE_MEMORY_MAPPED_REGISTER_R
-#undef DEFINE_MEMORY_MAPPED_REGISTER_W
-		default:
-			throw NotImplementedException();
-		}
-	}
-	
 	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 

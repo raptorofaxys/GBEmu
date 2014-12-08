@@ -41,10 +41,7 @@ int main(int argc, char **argv)
 			throw Exception("Couldn't create renderer");
 		}
 
-		GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
-		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
-		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
-		//GameBoy gb("cpu_instrs\\cpu_instrs.gb", pRenderer.get());
+		GameBoy gb("cpu_instrs\\cpu_instrs.gb", pRenderer.get());
 		//GameBoy gb("cpu_instrs\\source\\test.gb");
 		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
 		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
@@ -53,10 +50,18 @@ int main(int argc, char **argv)
 		//GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
 		//GameBoy gb("cpu_instrs\\individual\\06-ld r,r.gb");
 		//GameBoy gb("cpu_instrs\\individual\\07-jr,jp,call,ret,rst.gb");
-		//GameBoy gb("cpu_instrs\\individual\\08-misc instrs.gb"); // missing f2
+		//GameBoy gb("cpu_instrs\\individual\\08-misc instrs.gb");
 		//GameBoy gb("cpu_instrs\\individual\\09-op r,r.gb");
-		//GameBoy gb("cpu_instrs\\individual\\10-bit ops.gb"); // missing CB 40
-		//GameBoy gb("cpu_instrs\\individual\\11-op a,(hl).gb"); // missing CB 46
+		//GameBoy gb("cpu_instrs\\individual\\10-bit ops.gb");
+		//GameBoy gb("cpu_instrs\\individual\\11-op a,(hl).gb");
+
+		//GameBoy gb("Alleyway (JUE) [!].gb", pRenderer.get()); // missing external RAM
+		//GameBoy gb("Balloon Kid (JUE) [!].gb", pRenderer.get()); // renders white
+		//GameBoy gb("F-1 Race (JUE) (V1.1) [!].gb", pRenderer.get()); // MBC2 + battery
+		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
+		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
+		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
+
 		const auto& gameName = gb.GetRom().GetRomName();
 		SDL_SetWindowTitle(pWindow.get(), gameName.c_str());
 
