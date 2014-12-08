@@ -20,7 +20,7 @@ public:
 		OBP0 = 0xFF48,	// Object palette 0 data
 		OBP1 = 0xFF49,	// Object palette 1 data
 		WY = 0xFF4A,	// Window Y position
-		WX = 0xFF4B,	// WIndow X position minus 7
+		WX = 0xFF4B,	// Window X position minus 7
 	};
 
 	enum class State
@@ -165,6 +165,7 @@ public:
 				mode = 1;
 				m_updateTimeLeft = 0.0f;
 				m_scanLine = -1;
+				LY = 0;
 				m_nextState = State::ReadingOam;
 			}
 

@@ -130,10 +130,6 @@ public:
 
 		while (m_cyclesRemaining > 0)
 		{
-			m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
-			//m_pCpu->SetTraceEnabled(true);
-			m_pCpu->DebugNextOpcode();
-
 			auto instructionCycles = m_pCpu->ExecuteSingleInstruction();
 			//auto instructionCycles = 4;
 			m_totalCyclesExecuted += instructionCycles;
@@ -145,6 +141,16 @@ public:
 			m_pTimer->Update(timeSpentOnInstruction);
 			m_pLcd->Update(timeSpentOnInstruction);
 			m_pSound->Update(timeSpentOnInstruction);
+
+			static Sint32 breakpointAddress = -1;
+			if (m_pCpu->GetPC() == breakpointAddress)
+			{
+				Step();
+			}
+
+			m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
+			//m_pCpu->SetTraceEnabled(true);
+			m_pCpu->DebugNextOpcode();
 		}
 
 		//@TODO: synchronize updates to LCD controller vblanks to avoid tearing
