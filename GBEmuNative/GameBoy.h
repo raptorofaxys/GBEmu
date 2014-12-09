@@ -8,7 +8,7 @@
 #include "GameLinkPort.h"
 #include "Lcd.h"
 #include "Sound.h"
-#include "UnusableMemory.h"
+#include "Memory.h"
 #include "UnknownMemoryMappedRegisters.h"
 
 #include "RomOnlyMapper.h"
@@ -43,25 +43,25 @@ public:
 			throw Exception("Unsupported cartridge type: %d", cartridgeType);
 		}
 
-		m_pMemory.reset(new MemoryBus());
-		m_pCpu.reset(new Cpu(m_pMemory));
-		m_pTimer.reset(new Timer(m_pMemory, m_pCpu));
-		m_pJoypad.reset(new Joypad(m_pMemory, m_pCpu));
+		m_pMemoryBus.reset(new MemoryBus());
+		m_pMemory.reset(new Memory());
+		m_pCpu.reset(new Cpu(m_pMemoryBus));
+		m_pTimer.reset(new Timer(m_pMemoryBus, m_pCpu));
+		m_pJoypad.reset(new Joypad(m_pMemoryBus, m_pCpu));
 		m_pGameLinkPort.reset(new GameLinkPort());
-		m_pLcd.reset(new Lcd(m_pMemory, m_pCpu, m_pFrameBuffer));
+		m_pLcd.reset(new Lcd(m_pMemoryBus, m_pCpu, m_pFrameBuffer));
 		m_pSound.reset(new Sound());
-		m_pUnusableMemory.reset(new UnusableMemory());
 		m_pUnknownMemoryMappedRegisters.reset(new UnknownMemoryMappedRegisters());
 
-		m_pMemory->AddDevice(m_pMapper);
-		m_pMemory->AddDevice(m_pCpu);
-		m_pMemory->AddDevice(m_pTimer);
-		m_pMemory->AddDevice(m_pJoypad);
-		m_pMemory->AddDevice(m_pGameLinkPort);
-		m_pMemory->AddDevice(m_pLcd);
-		m_pMemory->AddDevice(m_pSound);
-		m_pMemory->AddDevice(m_pUnusableMemory);
-		m_pMemory->AddDevice(m_pUnknownMemoryMappedRegisters);
+		m_pMemoryBus->AddDevice(m_pMemory);
+		m_pMemoryBus->AddDevice(m_pMapper);
+		m_pMemoryBus->AddDevice(m_pCpu);
+		m_pMemoryBus->AddDevice(m_pTimer);
+		m_pMemoryBus->AddDevice(m_pJoypad);
+		m_pMemoryBus->AddDevice(m_pGameLinkPort);
+		m_pMemoryBus->AddDevice(m_pLcd);
+		m_pMemoryBus->AddDevice(m_pSound);
+		m_pMemoryBus->AddDevice(m_pUnknownMemoryMappedRegisters);
 
 		Reset();
 	}
@@ -82,6 +82,7 @@ public:
 		m_cyclesRemaining = 0.0f;
 		m_debuggerState = DebuggerState::Running;
 
+		m_pMemoryBus->Reset();
 		m_pMemory->Reset();
 		m_pCpu->Reset();
 		m_pTimer->Reset();
@@ -163,14 +164,14 @@ private:
 	// @TODO: possibly refactor into some kind of system component collection?
 	std::shared_ptr<Rom> m_pRom;
 	std::shared_ptr<MemoryMapper> m_pMapper;
-	std::shared_ptr<MemoryBus> m_pMemory;
+	std::shared_ptr<MemoryBus> m_pMemoryBus;
+	std::shared_ptr<Memory> m_pMemory;
 	std::shared_ptr<Cpu> m_pCpu;
 	std::shared_ptr<Timer> m_pTimer;
 	std::shared_ptr<Joypad> m_pJoypad;
 	std::shared_ptr<GameLinkPort> m_pGameLinkPort;
 	std::shared_ptr<Lcd> m_pLcd;
 	std::shared_ptr<Sound> m_pSound;
-	std::shared_ptr<UnusableMemory> m_pUnusableMemory;
 	std::shared_ptr<UnknownMemoryMappedRegisters> m_pUnknownMemoryMappedRegisters;
 
 	float m_totalCyclesExecuted;

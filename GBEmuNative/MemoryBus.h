@@ -22,15 +22,6 @@ namespace MemoryDeviceStatus
 class MemoryBus
 {
 public:
-	static const int kWorkMemoryBase = 0xC000;
-	static const int kWorkMemorySize = 0x2000; // 8k (not supporting CGB switchable mode)
-
-	// Handling this specially because it overlays memory-mapped registers, but it's just the same as working memory
-	static const int kEchoBase = 0xE000;
-	static const int kEchoSize = 0xFE00 - kEchoBase;
-
-	static const int kHramMemoryBase = 0xFF80;
-	static const int kHramMemorySize = 0xFFFF - kHramMemoryBase; // last byte is IE register
 
 	static const int kAddressSpaceSize = 0x10000;
 
@@ -47,10 +38,6 @@ public:
 
 	void Reset()
 	{
-		// Initialize to illegal opcode 0xFD
-		memset(m_workMemory, 0xFD, sizeof(m_workMemory));
-		memset(m_hram, 0xFD, sizeof(m_hram));
-
 		for (auto& index: m_deviceIndexAtAddress)
 		{
 			index = MemoryDeviceStatus::Unknown;
@@ -64,39 +51,25 @@ public:
 			*pSuccess = true;
 		}
 
-		if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
-		{
-			return m_workMemory[address - kWorkMemoryBase];
-		}
-		else if (IsAddressInRange(address, kEchoBase, kEchoSize))
-		{
-			return m_workMemory[address - kEchoBase];
-		}
-		else if (IsAddressInRange(address, kHramMemoryBase, kHramMemorySize))
-		{
-			return m_hram[address - kHramMemoryBase];
-		}
-		else
-		{
-			EnsureDeviceIsProbed(address);
-			const auto& deviceIndex = m_deviceIndexAtAddress[address];
-			if (deviceIndex >= 0)
-			{
-				Uint8 result = 0;
-				m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Read, address, result);
-				return result;
-			}
 
-			if (throwIfFailed)
-			{
-				throw NotImplementedException();
-			}
-			if (pSuccess)
-			{
-				*pSuccess = false;
-			}
-			return 0xFF;
+		EnsureDeviceIsProbed(address);
+		const auto& deviceIndex = m_deviceIndexAtAddress[address];
+		if (deviceIndex >= 0)
+		{
+			Uint8 result = 0;
+			m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Read, address, result);
+			return result;
 		}
+
+		if (throwIfFailed)
+		{
+			throw NotImplementedException();
+		}
+		if (pSuccess)
+		{
+			*pSuccess = false;
+		}
+		return 0xFF;
 	}
 	
 	bool SafeRead8(Uint16 address, Uint8& value)
@@ -114,30 +87,15 @@ public:
 
 	void Write8(Uint16 address, Uint8 value)
 	{
-		if (IsAddressInRange(address, kWorkMemoryBase, kWorkMemorySize))
+		EnsureDeviceIsProbed(address);
+		const auto& deviceIndex = m_deviceIndexAtAddress[address];
+		if (deviceIndex >= 0)
 		{
-			m_workMemory[address - kWorkMemoryBase] = value;
+			m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Write, address, value);
+			return;
 		}
-		else if (IsAddressInRange(address, kEchoBase, kEchoSize))
-		{
-			m_workMemory[address - kEchoBase] = value;
-		}
-		else if (IsAddressInRange(address, kHramMemoryBase, kHramMemorySize))
-		{
-			m_hram[address - kHramMemoryBase] = value;
-		}
-		else
-		{
-			EnsureDeviceIsProbed(address);
-			const auto& deviceIndex = m_deviceIndexAtAddress[address];
-			if (deviceIndex >= 0)
-			{
-				m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Write, address, value);
-				return;
-			}
 
-			throw NotImplementedException();
-		}
+		throw NotImplementedException();
 	}
 
 	void Write16(Uint16 address, Uint16 value)
@@ -200,7 +158,4 @@ private:
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 
 	int m_deviceIndexAtAddress[kAddressSpaceSize]; // it's good to be in 2014 - this could be much more efficient in terms of space but there's no need for that right now
-
-	Uint8 m_workMemory[kWorkMemorySize];
-	Uint8 m_hram[kHramMemorySize];
 };

@@ -111,7 +111,7 @@
     <ClInclude Include="Sound.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="UnknownMemoryMappedRegisters.h" />
-    <ClInclude Include="UnusableMemory.h" />
+    <ClInclude Include="Memory.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

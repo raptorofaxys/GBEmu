@@ -56,9 +56,6 @@
     <ClInclude Include="RomOnlyMapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="UnusableMemory.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="MemoryMapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -72,6 +69,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="UnknownMemoryMappedRegisters.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
