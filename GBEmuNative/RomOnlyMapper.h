@@ -18,6 +18,10 @@ public:
 	static const int kRomBase = 0x0000;
 	static const int kRomSize = 0x8000;
 
+	static const int kRamBankBase = 0xA000;
+	static const int kRamBankSize = 0xC000 - kRamBankBase;
+	static const int kExternalRamSize = kRamBankSize * 4;
+
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
 	{
 		if (IsAddressInRange(address, kRomBase, kRomSize))
@@ -33,10 +37,16 @@ public:
 				return true;
 			}
 		}
+		else if (ServiceMemoryRangeRequest(requestType, address, value, kRamBankBase, kRamBankSize, m_externalRam))
+		{
+			return true;
+		}
 
 		return false;
 	}
 
 private:
 	std::shared_ptr<Rom> m_pRom;
+
+	Uint8 m_externalRam[kExternalRamSize];
 };

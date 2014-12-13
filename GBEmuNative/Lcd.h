@@ -224,14 +224,65 @@ public:
 		SDL_UnlockTexture(m_pFrameBuffer.get());
 	}
 
+	Uint8 GetTileIndexAtXY(Uint16 tileMapBaseAddress, int x, int y)
+	{
+		// Tiles are 8x8; see which tile we're in
+		Uint8 tileMapX = x / 8;
+		Uint8 tileMapY = y / 8;
+
+		// Tile maps are 32x32
+		Uint16 tileOffset = tileMapY * 32 + tileMapX;
+
+		Uint8 tileIndex = m_pMemoryUnsafe->Read8(tileMapBaseAddress + tileOffset);
+		
+		return tileIndex;
+	}
+
+	Uint8 GetTileDataPixelColorIndex(Uint16 baseTileDataAddress, Sint16 tileIndex, int x, int y)
+	{
+		// Fetch the pixel's color index from the tile data
+		Uint8 tileDataX = x % 8;
+		Uint8 tileDataY = y % 8;
+		Uint8 tileDataShift = 7 - tileDataX;
+		Uint8 tileDataMask = 1 << tileDataShift;
+
+		// Each tile's data occupies 16 bytes, and each row of tile data occupies two bytes
+		Uint16 tileDataAddress = baseTileDataAddress + tileIndex * 16 + tileDataY * 2;
+
+		Uint8 tileRowLsb = (m_pMemoryUnsafe->Read8(tileDataAddress) & tileDataMask) >> tileDataShift;
+		Uint8 tileRowMsb = (m_pMemoryUnsafe->Read8(tileDataAddress + 1) & tileDataMask) >> tileDataShift;
+
+		Uint8 colorIndex = (tileRowMsb << 1) | tileRowLsb;
+
+		return colorIndex;
+	}
+
+	Uint8 GetLuminosityForColorIndex(Uint8 paletteRegister, Uint8 colorIndex)
+	{
+		// Translate the color index to an actual color using the palette registers
+		Uint8 shadeShift = 2 * colorIndex;
+		Uint8 shadeMask = 0x3 << shadeShift;
+		Uint8 shade = (BGP & shadeMask) >> shadeShift;
+
+		Uint8 luminosity = (3 - shade) * 0x55;
+		
+		return luminosity;
+	}
+
 	void RenderScanline()
 	{
 		if (LY < kScreenHeight)
 		{
 			//@TODO: Bit 6 - Window Tile Map Display Select(0 = 9800 - 9BFF, 1 = 9C00 - 9FFF)
-			//@TODO: Bit 5 - Window Display Enable(0 = Off, 1 = On)
 			//@TODO: Bit 2 - OBJ(Sprite) Size(0 = 8x8, 1 = 8x16)
 			//@TODO: Bit 1 - OBJ(Sprite) Display Enable(0 = Off, 1 = On)
+
+			if (LCDC & Bit2)
+			{
+				// Sprites are 8x16
+				DebugBreak();
+			}
+
 			void* pPixels;
 			int pitch;
 			SDL_LockTexture(m_pFrameBuffer.get(), NULL, &pPixels, &pitch);
@@ -241,7 +292,6 @@ public:
 			//static Uint8 palette[] = {0xFF, 0xC0, }
 
 			static int c = 0;
-			Uint16 y = (SCY + m_scanLine) % 256;
 			for (int screenX = 0; screenX < kScreenWidth; ++screenX)
 			{
 				Uint8 a = 0xFF;
@@ -253,16 +303,10 @@ public:
 				{
 					// Background is active
 					Uint16 x = (SCX + screenX) % 256;
+					Uint16 y = (SCY + m_scanLine) % 256;
 
-					// Tiles are 8x8; see which tile we're in
-					Uint8 tileMapX = x / 8;
-					Uint8 tileMapY = y / 8;
-
-					// Background tile map is 32x32
-					Uint16 tileOffset = tileMapY * 32 + tileMapX;
 					Uint16 tileMapBaseAddress = (LCDC & Bit3) ? 0x9C00 : 0x9800;
-
-					Sint16 tileIndex = m_pMemoryUnsafe->Read8(tileMapBaseAddress + tileOffset);
+					Sint16 tileIndex = GetTileIndexAtXY(tileMapBaseAddress, x, y);
 
 					// Find the tile data
 					Uint16 baseTileDataAddress = 0;
@@ -279,31 +323,37 @@ public:
 						}
 					}
 
-					// Fetch the pixel's color index from the tile data
-					Uint8 tileDataX = x % 8;
-					Uint8 tileDataY = y % 8;
-					Uint8 tileDataShift = 7 - tileDataX;
-					Uint8 tileDataMask = 1 << tileDataShift;
-
-					// Each tile's data occupies 16 bytes, and each row of tile data occupies two bytes
-					Uint16 tileDataAddress = baseTileDataAddress + tileIndex * 16 + tileDataY * 2;
-
-					Uint8 tileRowLsb = (m_pMemoryUnsafe->Read8(tileDataAddress) & tileDataMask) >> tileDataShift;
-					Uint8 tileRowMsb = (m_pMemoryUnsafe->Read8(tileDataAddress + 1) & tileDataMask) >> tileDataShift;
-
-					Uint8 colorIndex = (tileRowMsb << 1) | tileRowLsb;
-					//colorIndex = rand() % 4;
-
-					// Translate the color index to an actual color using the palette registers
-					Uint8 shadeShift = 2 * colorIndex;
-					Uint8 shadeMask = 0x3 << shadeShift;
-					Uint8 shade = (BGP & shadeMask) >> shadeShift;
-
-					Uint8 luminosity = (3 - shade) * 0x55;
+					auto colorIndex = GetTileDataPixelColorIndex(baseTileDataAddress, tileIndex, x, y);
+					
+					auto luminosity = GetLuminosityForColorIndex(BGP, colorIndex);
 
 					r = luminosity;
 					g = luminosity;
 					b = luminosity;
+				}
+
+				// Window - always displayed above background
+				static bool enableWindow = true;
+				if (enableWindow && (LCDC & Bit5))
+				{
+					Sint16 x = screenX - (WX - 7);
+					Sint16 y = m_scanLine - WY;
+
+					if ((x >= 0) && (x < 160) && (y >= 0) && (y < 144))
+					{
+						Uint16 tileMapBaseAddress = (LCDC & Bit6) ? 0x9C00 : 0x9800;
+						Sint8 tileIndex = GetTileIndexAtXY(tileMapBaseAddress, x, y); // Window tiles are always signed
+
+						// Find the tile data
+						Uint16 baseTileDataAddress = 0x9000;
+						auto colorIndex = GetTileDataPixelColorIndex(baseTileDataAddress, tileIndex, x, y);
+
+						auto luminosity = GetLuminosityForColorIndex(BGP, colorIndex);
+
+						r = luminosity;
+						g = luminosity;
+						b = luminosity;
+					}
 				}
 
 				//*pARGB = 0xFF000000 | (0xFF << ((c % 3) * 8));

@@ -55,10 +55,10 @@ int main(int argc, char **argv)
 		//GameBoy gb("cpu_instrs\\individual\\10-bit ops.gb");
 		//GameBoy gb("cpu_instrs\\individual\\11-op a,(hl).gb");
 
-		//GameBoy gb("Alleyway (JUE) [!].gb", pRenderer.get()); // missing external RAM
-		//GameBoy gb("Balloon Kid (JUE) [!].gb", pRenderer.get()); // renders white
+		//GameBoy gb("Alleyway (JUE) [!].gb", pRenderer.get()); // messed up attract mode
+		//GameBoy gb("Balloon Kid (JUE) [!].gb", pRenderer.get());
 		//GameBoy gb("F-1 Race (JUE) (V1.1) [!].gb", pRenderer.get()); // MBC2 + battery
-		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
+		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb", pRenderer.get());
 		//GameBoy gb("SolarStriker (JU) [!].gb", pRenderer.get());
 		GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());

@@ -83,13 +83,13 @@ public:
 			}
 			forceUpdate = false;
 
-			SDL_JoystickUpdate();
+			//SDL_JoystickUpdate();
 
 			const auto pKeyState = SDL_GetKeyboardState(nullptr);
 
 			Uint8 oldValues = P1_JOYP & 0x0F;
 			
-			if (P1_JOYP & Bit5)
+			if ((P1_JOYP & Bit5) == 0)
 			{
 				// Buttons
 				SetBitValue(P1_JOYP, 0, pKeyState[SDL_SCANCODE_P] == 0); // A: P
@@ -124,7 +124,8 @@ public:
 					}
 				}
 			}
-			else
+			
+			if ((P1_JOYP & Bit4) == 0)
 			{
 				// D-pad
 				SetBitValue(P1_JOYP, 0, pKeyState[SDL_SCANCODE_RIGHT] == 0);

@@ -37,7 +37,11 @@ public:
 		switch (cartridgeType)
 		{
 		case CartridgeType::ROM_ONLY: m_pMapper.reset(new RomOnlyMapper(m_pRom)); break;
-		case CartridgeType::MBC1: m_pMapper.reset(new Mbc1Mapper(m_pRom)); break;
+		
+		case CartridgeType::MBC1:
+		case CartridgeType::MBC1_RAM:
+		case CartridgeType::MBC1_RAM_BATTERY:
+			m_pMapper.reset(new Mbc1Mapper(m_pRom)); break;
 
 		default:
 			throw Exception("Unsupported cartridge type: %d", cartridgeType);
