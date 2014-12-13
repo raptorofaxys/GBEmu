@@ -31,6 +31,17 @@ inline Uint8 GetHigh8(Uint16 u16) { return (u16 >> 8) & 0xFF; }
 
 inline Uint16 Make16(Uint8 high, Uint8 low) { return (high << 8) | low; }
 
+inline void SetBitValue(Uint8& byte, Uint8 position, bool value)
+{
+	auto bitMask = (1 << position);
+	byte = value ? (byte | bitMask) : (byte & ~bitMask);
+}
+
+inline bool GetBitValue(Uint8 byte, Uint8 position)
+{
+	return (byte & (1 << position)) != 0;
+}
+
 inline bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
 {
 	return (address >= base) && (address < base + rangeSize);

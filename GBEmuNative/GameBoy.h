@@ -62,6 +62,7 @@ public:
 		m_pMemoryBus->AddDevice(m_pLcd);
 		m_pMemoryBus->AddDevice(m_pSound);
 		m_pMemoryBus->AddDevice(m_pUnknownMemoryMappedRegisters);
+		m_pMemoryBus->LockDevices();
 
 		Reset();
 	}
@@ -81,6 +82,7 @@ public:
 		m_totalCyclesExecuted = 0.0f;
 		m_cyclesRemaining = 0.0f;
 		m_debuggerState = DebuggerState::Running;
+		m_breakpointAddress = -1;
 
 		m_pMemoryBus->Reset();
 		m_pMemory->Reset();
@@ -108,6 +110,12 @@ public:
 		}
 	}
 
+	void Stop()
+	{
+		m_debuggerState = DebuggerState::SingleStepping;
+		m_cyclesRemaining = 0;
+	}
+
 	void Step()
 	{
 		m_debuggerState = DebuggerState::SingleStepping;
@@ -117,6 +125,18 @@ public:
 	void Go()
 	{
 		m_debuggerState = DebuggerState::Running;
+	}
+	
+	void BreakAtNextInstruction()
+	{
+		auto PC = m_pCpu->GetPC();
+		m_breakpointAddress = PC + m_pCpu->GetInstructionSize(PC);
+		Go();
+	}
+
+	void BreakInDebugger()
+	{
+		DebugBreak();
 	}
 
 	void Update(float seconds)
@@ -143,13 +163,16 @@ public:
 			auto timeSpentOnInstruction = timePerClockCycle * instructionCycles;
 
 			m_pTimer->Update(timeSpentOnInstruction);
+			m_pJoypad->Update(timeSpentOnInstruction);
 			m_pLcd->Update(timeSpentOnInstruction);
 			m_pSound->Update(timeSpentOnInstruction);
 
-			static Sint32 breakpointAddress = -1;
-			if (m_pCpu->GetPC() == breakpointAddress)
+			//static Sint32 breakpointAddress = -1;
+			if ((m_pCpu->GetPC() == m_breakpointAddress) || s_stopOnNextInstruction)
 			{
-				Step();
+				Stop();
+				m_breakpointAddress = -1;
+				s_stopOnNextInstruction = false;
 			}
 
 			m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
@@ -161,6 +184,8 @@ public:
 	}
 
 private:
+	static bool s_stopOnNextInstruction;
+	
 	// @TODO: possibly refactor into some kind of system component collection?
 	std::shared_ptr<Rom> m_pRom;
 	std::shared_ptr<MemoryMapper> m_pMapper;
@@ -177,6 +202,7 @@ private:
 	float m_totalCyclesExecuted;
 	float m_cyclesRemaining;
 	DebuggerState m_debuggerState;
+	Sint32 m_breakpointAddress;
 
 	std::shared_ptr<SDL_Texture> m_pFrameBuffer;
 };

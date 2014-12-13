@@ -33,7 +33,6 @@ public:
 	static const int kRomSwitchedBankBase = 0x4000;
 	static const int kRomSwitchedBankSize = 0x8000 - kRomSwitchedBankBase;
 
-	//@TODO: move out of here since it seems alleyway wants to use this even though it doesn't use MBC1
 	static const int kRamBankBase = 0xA000;
 	static const int kRamBankSize = 0xC000 - kRamBankBase;
 	static const int kExternalRamSize = kRamBankSize * 4;

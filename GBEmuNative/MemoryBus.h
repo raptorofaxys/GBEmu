@@ -28,20 +28,29 @@ public:
 	MemoryBus()
 	{
 		Reset();
+		m_devicesLocked = false;
 	}
 
 	void AddDevice(std::shared_ptr<IMemoryBusDevice> pDevice)
 	{
+		SDL_assert(!m_devicesLocked);
+
 		m_devices.push_back(pDevice);
 		m_devicesUnsafe.push_back(pDevice.get());
 	}
 
+	void LockDevices()
+	{
+		for (Uint32 address = 0; address < kAddressSpaceSize; ++address)
+		{
+			m_deviceIndexAtAddress[address] = MemoryDeviceStatus::Unknown;
+			EnsureDeviceIsProbed(address);
+		}
+		m_devicesLocked = true;
+	}
+
 	void Reset()
 	{
-		for (auto& index: m_deviceIndexAtAddress)
-		{
-			index = MemoryDeviceStatus::Unknown;
-		}
 	}
 
 	Uint8 Read8(Uint16 address, bool throwIfFailed = true, bool* pSuccess = nullptr)
@@ -51,8 +60,13 @@ public:
 			*pSuccess = true;
 		}
 
+		if (dataBreakpointActive && (address == dataBreakpointAddress))
+		{
+			int x = 3;
+		}
 
-		EnsureDeviceIsProbed(address);
+		SDL_assert(m_devicesLocked);
+		//EnsureDeviceIsProbed(address);
 		const auto& deviceIndex = m_deviceIndexAtAddress[address];
 		if (deviceIndex >= 0)
 		{
@@ -87,7 +101,13 @@ public:
 
 	void Write8(Uint16 address, Uint8 value)
 	{
-		EnsureDeviceIsProbed(address);
+		if (dataBreakpointActive && (address == dataBreakpointAddress))
+		{
+			int x = 3;
+		}
+
+		SDL_assert(m_devicesLocked);
+		//EnsureDeviceIsProbed(address);
 		const auto& deviceIndex = m_deviceIndexAtAddress[address];
 		if (deviceIndex >= 0)
 		{
@@ -106,8 +126,8 @@ public:
 
 private:
 
-	static bool breakOnRegisterAccess;
-	static Uint16 breakRegister;
+	static bool dataBreakpointActive;
+	static Uint16 dataBreakpointAddress;
 
 	void EnsureDeviceIsProbed(Uint16 address)
 	{
@@ -154,6 +174,7 @@ private:
 		}
 	}
 
+	bool m_devicesLocked;
 	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 

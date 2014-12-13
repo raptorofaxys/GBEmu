@@ -8,8 +8,11 @@ class UnknownMemoryMappedRegisters: public IMemoryBusDevice
 	{
 		switch (address)
 		{
+		case 0xFF7B:
+		case 0xFF7C:
+		case 0xFF7D:
+		case 0xFF7E:
 		case 0xFF7F:
-			// Tetris writes here, no documented function
 			// Just ignore accesses
 			return true;
 		}
