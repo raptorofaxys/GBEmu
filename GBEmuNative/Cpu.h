@@ -1827,7 +1827,8 @@ private:
 				cycles = ExecuteSingleInstruction();
 			}
 			meta.cycles = cycles;
-			meta.size = pTracingMemory->GetNumReads();//@TODO: count num fetches instead
+			//@TODO: get rid of this; it is broken
+			meta.size = pTracingMemory->GetNumReads();
 		}
 
 		m_pMemory = oldMemory;

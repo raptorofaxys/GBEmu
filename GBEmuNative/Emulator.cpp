@@ -60,8 +60,8 @@ int main(int argc, char **argv)
 		//GameBoy gb("F-1 Race (JUE) (V1.1) [!].gb", pRenderer.get()); // MBC2 + battery
 		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb");
 		//GameBoy gb("SolarStriker (JU) [!].gb", pRenderer.get());
-		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
-		GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
+		GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
+		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
 
 		const auto& gameName = gb.GetRom().GetRomName();
 		SDL_SetWindowTitle(pWindow.get(), gameName.c_str());

@@ -57,6 +57,7 @@ public:
 		m_nextState = State::ReadingOam;
 		m_scanLine = 0;
 		m_wasLcdEnabledLastUpdate = true;
+		m_lastMode = 0;
 
 		RenderDisabledFrameBuffer();
 
@@ -109,16 +110,6 @@ public:
 							STAT &= ~Bit2;
 						}
 
-						if (STAT & Bit5)
-						{
-							m_pCpu->SignalInterrupt(Bit1);
-						}
-
-						if ((STAT & Bit4) && (m_scanLine == 144))
-						{
-							m_pCpu->SignalInterrupt(Bit0);
-						}
-
 						if (m_scanLine > 153)
 						{
 							m_scanLine = 0;
@@ -141,11 +132,6 @@ public:
 					break;
 				case State::HBlank:
 					{
-						if (STAT & Bit3)
-						{
-							m_pCpu->SignalInterrupt(Bit1);
-						}
-
 						m_updateTimeLeft -= 0.0000486f;
 						mode = 0;
 						m_nextState = State::ReadingOam;
@@ -158,11 +144,44 @@ public:
 					// Vblank
 					mode = 1;
 				}
+
+				if (mode != m_lastMode)
+				{
+					switch (mode)
+					{
+					case 0:
+						// HBlank interrupt
+						if (STAT & Bit3)
+						{
+							m_pCpu->SignalInterrupt(Bit1);
+						}
+						break;
+					case 1:
+						// VBlank interrupt
+						if (STAT & Bit4)
+						{
+							m_pCpu->SignalInterrupt(Bit1);
+						}
+						// Always fire the blank into IF
+						m_pCpu->SignalInterrupt(Bit0);
+						break;
+					case 2:
+						// Reading OAM interrupt
+						if (STAT & Bit5)
+						{
+							m_pCpu->SignalInterrupt(Bit1);
+						}
+						break;
+					}
+				}
+
+				m_lastMode = mode;
 			}
 			else
 			{
 				// LCD is disabled
 				mode = 1;
+				m_lastMode = 1;
 				m_updateTimeLeft = 0.0f;
 				m_scanLine = -1;
 				LY = 0;
@@ -396,6 +415,7 @@ private:
 	State m_nextState;
 	int m_scanLine;
 	bool m_wasLcdEnabledLastUpdate;
+	int m_lastMode;
 
 	Uint8 m_vram[kVramSize];
 	Uint8 m_oam[kOamSize];
