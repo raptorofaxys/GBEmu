@@ -167,7 +167,6 @@ public:
 			m_pLcd->Update(timeSpentOnInstruction);
 			m_pSound->Update(timeSpentOnInstruction);
 
-			//static Sint32 breakpointAddress = -1;
 			if ((m_pCpu->GetPC() == m_breakpointAddress) || s_stopOnNextInstruction)
 			{
 				Stop();
