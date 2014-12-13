@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
 		SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-		if (SDL_Init(SDL_INIT_VIDEO) < 0)
+		if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) < 0)
 		{
 			throw Exception("Couldn't initialize SDL: %s", SDL_GetError());
 		}
