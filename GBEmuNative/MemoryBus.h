@@ -77,7 +77,7 @@ public:
 
 		if (throwIfFailed)
 		{
-			throw NotImplementedException();
+			throw Exception("Attempted read of at address 0x%04lX.", address);
 		}
 		if (pSuccess)
 		{
@@ -115,7 +115,7 @@ public:
 			return;
 		}
 
-		throw NotImplementedException();
+		throw Exception("Attempted write of value %d at address 0x%04lX.", value, address);
 	}
 
 	void Write16(Uint16 address, Uint16 value)
@@ -159,11 +159,12 @@ private:
 					if (deviceIndexAtAddress == MemoryDeviceStatus::Unknown)
 					{
 						deviceIndexAtAddress = deviceIndex;
+						break;
 					}
-					else
-					{
-						throw Exception("Two memory devices handle address 0x%04lX", address);
-					}
+					//else
+					//{
+					//	throw Exception("Two memory devices handle address 0x%04lX", address);
+					//}
 				}
 			}
 			

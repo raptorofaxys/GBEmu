@@ -224,6 +224,22 @@ public:
 		SDL_UnlockTexture(m_pFrameBuffer.get());
 	}
 
+	Uint8 ReadVram(Uint16 address)
+	{
+		Uint16 offset = address - kVramBase;
+		SDL_assert(offset < kVramSize);
+
+		return m_vram[offset];
+	}
+
+	Uint8 ReadOam(Uint16 address)
+	{
+		Uint16 offset = address - kOamBase;
+		SDL_assert(offset < kOamSize);
+
+		return m_oam[offset];
+	}
+
 	Uint8 GetTileIndexAtXY(Uint16 tileMapBaseAddress, int x, int y)
 	{
 		// Tiles are 8x8; see which tile we're in
@@ -233,7 +249,7 @@ public:
 		// Tile maps are 32x32
 		Uint16 tileOffset = tileMapY * 32 + tileMapX;
 
-		Uint8 tileIndex = m_pMemoryUnsafe->Read8(tileMapBaseAddress + tileOffset);
+		Uint8 tileIndex = ReadVram(tileMapBaseAddress + tileOffset);
 		
 		return tileIndex;
 	}
@@ -249,8 +265,8 @@ public:
 		// Each tile's data occupies 16 bytes, and each row of tile data occupies two bytes
 		Uint16 tileDataAddress = baseTileDataAddress + tileIndex * 16 + tileDataY * 2;
 
-		Uint8 tileRowLsb = (m_pMemoryUnsafe->Read8(tileDataAddress) & tileDataMask) >> tileDataShift;
-		Uint8 tileRowMsb = (m_pMemoryUnsafe->Read8(tileDataAddress + 1) & tileDataMask) >> tileDataShift;
+		Uint8 tileRowLsb = (ReadVram(tileDataAddress) & tileDataMask) >> tileDataShift;
+		Uint8 tileRowMsb = (ReadVram(tileDataAddress + 1) & tileDataMask) >> tileDataShift;
 
 		Uint8 colorIndex = (tileRowMsb << 1) | tileRowLsb;
 
@@ -368,8 +384,8 @@ public:
 					for (int spriteIndex = 0; spriteIndex < 40; ++spriteIndex)
 					{
 						Uint16 spriteBaseAddress = 0xFE00 + spriteIndex * 4;
-						Sint16 spriteBaseX = m_pMemoryUnsafe->Read8(spriteBaseAddress + 1) - 8;
-						Sint16 spriteBaseY = m_pMemoryUnsafe->Read8(spriteBaseAddress + 0) - 16;
+						Sint16 spriteBaseX = ReadOam(spriteBaseAddress + 1) - 8;
+						Sint16 spriteBaseY = ReadOam(spriteBaseAddress + 0) - 16;
 
 						Sint16 x = screenX - spriteBaseX;
 						Sint16 y = m_scanLine - spriteBaseY;
@@ -394,8 +410,8 @@ public:
 						Sint16 x = bestX;
 						Sint16 y = bestY;
 
-						Uint8 tileIndex = m_pMemoryUnsafe->Read8(spriteBaseAddress + 2);
-						Uint8 attributes = m_pMemoryUnsafe->Read8(spriteBaseAddress + 3);
+						Uint8 tileIndex = ReadOam(spriteBaseAddress + 2);
+						Uint8 attributes = ReadOam(spriteBaseAddress + 3);
 
 						// Horizontal flip
 						if (attributes & Bit5)
@@ -510,7 +526,7 @@ public:
 
 						for ( ; dmaDestinationAddress <= 0xFE9F; ++dmaSourceAddress, ++dmaDestinationAddress)
 						{
-							m_pMemory->Write8(dmaDestinationAddress, m_pMemory->Read8(dmaSourceAddress));
+							m_pMemoryUnsafe->Write8(dmaDestinationAddress, m_pMemoryUnsafe->Read8(dmaSourceAddress));
 						}
 						//@TODO: DMA transfer time emulation
 					}

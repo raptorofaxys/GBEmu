@@ -1777,12 +1777,12 @@ private:
 	void ComputeTracingData()
 	{
 		// Compute the size of each opcode
-		auto oldMemory = m_pMemory;
+		//auto oldMemory = m_pMemory;
 
-		m_pMemory.reset(new MemoryBus());
-		std::shared_ptr<TracingMemory> pTracingMemory(new TracingMemory());
-		m_pMemory->AddDevice(pTracingMemory);
-		m_pMemory->LockDevices();
+		//m_pMemory.reset(new MemoryBus());
+		//std::shared_ptr<TracingMemory> pTracingMemory(new TracingMemory());
+		//m_pMemory->AddDevice(pTracingMemory);
+		//m_pMemory->LockDevices();
 
 		// First, parse what we can from the static opcode metadata
 		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
@@ -1805,33 +1805,33 @@ private:
 			ParseMnemonic(GetExtendedOpcodeMnemonic(opcode), meta);
 		}
 
-		// Then, reflect the code by simulating the executing of each opcode
-		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
-		{
-			Uint8 opcode = static_cast<Uint8>(opcode16);
+		//// Then, reflect the code by simulating the executing of each opcode
+		//for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
+		//{
+		//	Uint8 opcode = static_cast<Uint8>(opcode16);
 
-			if (IsExtendedOpcode(opcode))
-			{
-				continue;
-			}
+		//	if (IsExtendedOpcode(opcode))
+		//	{
+		//		continue;
+		//	}
 
-			auto& meta = m_opcodeMetadata[opcode];
+		//	auto& meta = m_opcodeMetadata[opcode];
 
-			pTracingMemory->ResetForOpcode(opcode);
-			Reset();
-			PC = 0;
+		//	//pTracingMemory->ResetForOpcode(opcode);
+		//	Reset();
+		//	PC = 0;
 
-			Uint8 cycles = 0;
-			if (!meta.illegal)
-			{
-				cycles = ExecuteSingleInstruction();
-			}
-			meta.cycles = cycles;
-			//@TODO: get rid of this; it is broken
-			meta.size = pTracingMemory->GetNumReads();
-		}
+		//	Uint8 cycles = 0;
+		//	if (!meta.illegal)
+		//	{
+		//		cycles = ExecuteSingleInstruction();
+		//	}
+		//	meta.cycles = cycles;
+		//	//@TODO: get rid of this; it is broken
+		//	//meta.size = pTracingMemory->GetNumReads();
+		//}
 
-		m_pMemory = oldMemory;
+		//m_pMemory = oldMemory;
 	}
 
 	void DebugOpcode(Uint8 opcode)
