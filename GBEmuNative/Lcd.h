@@ -372,13 +372,10 @@ public:
 						DebugBreak();
 					}
 
-					// There is precious little documentation on what happens when sprites overlap.  I presume that there is only one selected sprite "hit" per pixel.
-					// For example, if you have a foreground sprite that's transparent and displayed above a background sprite, you will NOT see the background sprite at that pixel.
-					// I do attempt to preserve inter-sprite priority otherwise: smallest X first, then smallest address.
 					Sint16 bestBaseX;
-					Sint16 bestX;
-					Sint16 bestY;
 					int bestIndex = -1;
+					Uint8 bestLuminosity;
+					Uint8 bestAttributes;
 
 					// Find the best sprite hit for this pixel
 					for (int spriteIndex = 0; spriteIndex < 40; ++spriteIndex)
@@ -389,26 +386,6 @@ public:
 
 						Sint16 x = screenX - spriteBaseX;
 						Sint16 y = m_scanLine - spriteBaseY;
-
-						//int maxY = 
-						if ((x >= 0) && (x < 8) && (y >= 0) && (y < 8))
-						{
-							if ((bestIndex < 0) || (spriteBaseX < bestBaseX))
-							{
-								bestBaseX = spriteBaseX;
-								bestX = x;
-								bestY = y;
-								bestIndex = spriteIndex;
-							}
-						}
-					}
-
-					if (bestIndex >= 0)
-					{
-						Uint16 spriteBaseAddress = 0xFE00 + bestIndex * 4;
-
-						Sint16 x = bestX;
-						Sint16 y = bestY;
 
 						Uint8 tileIndex = ReadOam(spriteBaseAddress + 2);
 						Uint8 attributes = ReadOam(spriteBaseAddress + 3);
@@ -426,26 +403,37 @@ public:
 						}
 
 						auto colorIndex = GetTileDataPixelColorIndex(0x8000, tileIndex, x, y);
-
+						
 						Uint8 palette = ((attributes & Bit4) != 0) ? OBP1 : OBP0;
 						auto spriteLuminosity = GetLuminosityForColorIndex(palette, colorIndex);
 
-						// Sprite color 3 is always transparent
-						if (colorIndex != 0)
+						//int maxY = 
+						if ((colorIndex != 0) && (x >= 0) && (x < 8) && (y >= 0) && (y < 8))
 						{
-							if (attributes & Bit7)
+							if ((bestIndex < 0) || (spriteBaseX < bestBaseX))
 							{
-								// Sprite is behind background, it only shows if the background is transparent
-								if (backgroundIsTransparent)
-								{
-									luminosity = spriteLuminosity;
-								}
+								bestBaseX = spriteBaseX;
+								bestIndex = spriteIndex;
+								bestLuminosity = spriteLuminosity;
+								bestAttributes = attributes;
 							}
-							else
+						}
+					}
+
+					if (bestIndex >= 0)
+					{
+						if (bestAttributes & Bit7)
+						{
+							// Sprite is behind background, it only shows if the background is transparent
+							if (backgroundIsTransparent)
 							{
-								// Sprite is in front of background, it always shows
-								luminosity = spriteLuminosity;
+								luminosity = bestLuminosity;
 							}
+						}
+						else
+						{
+							// Sprite is in front of background, it always shows
+							luminosity = bestLuminosity;
 						}
 					}
 				}
