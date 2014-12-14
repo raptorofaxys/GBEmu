@@ -273,16 +273,6 @@ public:
 	{
 		if (LY < kScreenHeight)
 		{
-			//@TODO: Bit 6 - Window Tile Map Display Select(0 = 9800 - 9BFF, 1 = 9C00 - 9FFF)
-			//@TODO: Bit 2 - OBJ(Sprite) Size(0 = 8x8, 1 = 8x16)
-			//@TODO: Bit 1 - OBJ(Sprite) Display Enable(0 = Off, 1 = On)
-
-			if (LCDC & Bit2)
-			{
-				// Sprites are 8x16
-				DebugBreak();
-			}
-
 			void* pPixels;
 			int pitch;
 			SDL_LockTexture(m_pFrameBuffer.get(), NULL, &pPixels, &pitch);
@@ -298,6 +288,9 @@ public:
 				Uint8 r = 0xFF;
 				Uint8 g = 0xFF;
 				Uint8 b = 0xFF;
+				Uint8 luminosity = 0;
+
+				bool backgroundIsTransparent = false;
 
 				if (LCDC & Bit0)
 				{
@@ -324,18 +317,16 @@ public:
 					}
 
 					auto colorIndex = GetTileDataPixelColorIndex(baseTileDataAddress, tileIndex, x, y);
-					
-					auto luminosity = GetLuminosityForColorIndex(BGP, colorIndex);
 
-					r = luminosity;
-					g = luminosity;
-					b = luminosity;
+					backgroundIsTransparent = (colorIndex == 0);
+					
+					luminosity = GetLuminosityForColorIndex(BGP, colorIndex);
 				}
 
-				// Window - always displayed above background
 				static bool enableWindow = true;
 				if (enableWindow && (LCDC & Bit5))
 				{
+					// Window is active - always displayed above background
 					Sint16 x = screenX - (WX - 7);
 					Sint16 y = m_scanLine - WY;
 
@@ -348,23 +339,104 @@ public:
 						Uint16 baseTileDataAddress = 0x9000;
 						auto colorIndex = GetTileDataPixelColorIndex(baseTileDataAddress, tileIndex, x, y);
 
-						auto luminosity = GetLuminosityForColorIndex(BGP, colorIndex);
+						backgroundIsTransparent = (colorIndex == 0);
 
-						r = luminosity;
-						g = luminosity;
-						b = luminosity;
+						luminosity = GetLuminosityForColorIndex(BGP, colorIndex);
 					}
 				}
 
-				//*pARGB = 0xFF000000 | (0xFF << ((c % 3) * 8));
-				//if (!(LCDC & Bit7))
-				//{
-				//	// Display is off
-				//	r = 0xFF;
-				//	g = 0;
-				//	//g = 0xFF;
-				//	b = 0xFF;
-				//}
+				if (LCDC & Bit1)
+				{
+					// Sprites are active
+
+					if (LCDC & Bit2)
+					{
+						//@TODO: Bit 2 - OBJ(Sprite) Size(0 = 8x8, 1 = 8x16)
+						// Sprites are 8x16
+						DebugBreak();
+					}
+
+					// There is precious little documentation on what happens when sprites overlap.  I presume that there is only one selected sprite "hit" per pixel.
+					// For example, if you have a foreground sprite that's transparent and displayed above a background sprite, you will NOT see the background sprite at that pixel.
+					// I do attempt to preserve inter-sprite priority otherwise: smallest X first, then smallest address.
+					Sint16 bestBaseX;
+					Sint16 bestX;
+					Sint16 bestY;
+					int bestIndex = -1;
+
+					// Find the best sprite hit for this pixel
+					for (int spriteIndex = 0; spriteIndex < 40; ++spriteIndex)
+					{
+						Uint16 spriteBaseAddress = 0xFE00 + spriteIndex * 4;
+						Sint16 spriteBaseX = m_pMemoryUnsafe->Read8(spriteBaseAddress + 1) - 8;
+						Sint16 spriteBaseY = m_pMemoryUnsafe->Read8(spriteBaseAddress + 0) - 16;
+
+						Sint16 x = screenX - spriteBaseX;
+						Sint16 y = m_scanLine - spriteBaseY;
+
+						//int maxY = 
+						if ((x >= 0) && (x < 8) && (y >= 0) && (y < 8))
+						{
+							if ((bestIndex < 0) || (spriteBaseX < bestBaseX))
+							{
+								bestBaseX = spriteBaseX;
+								bestX = x;
+								bestY = y;
+								bestIndex = spriteIndex;
+							}
+						}
+					}
+
+					if (bestIndex >= 0)
+					{
+						Uint16 spriteBaseAddress = 0xFE00 + bestIndex * 4;
+
+						Sint16 x = bestX;
+						Sint16 y = bestY;
+
+						Uint8 tileIndex = m_pMemoryUnsafe->Read8(spriteBaseAddress + 2);
+						Uint8 attributes = m_pMemoryUnsafe->Read8(spriteBaseAddress + 3);
+
+						// Horizontal flip
+						if (attributes & Bit5)
+						{
+							x = 7 - x;
+						}
+
+						// Vertical flip
+						if (attributes & Bit6)
+						{
+							y = 7 - y;
+						}
+
+						auto colorIndex = GetTileDataPixelColorIndex(0x8000, tileIndex, x, y);
+
+						Uint8 palette = ((attributes & Bit4) != 0) ? OBP1 : OBP0;
+						auto spriteLuminosity = GetLuminosityForColorIndex(palette, colorIndex);
+
+						// Sprite color 3 is always transparent
+						if (colorIndex != 0)
+						{
+							if (attributes & Bit7)
+							{
+								// Sprite is behind background, it only shows if the background is transparent
+								if (backgroundIsTransparent)
+								{
+									luminosity = spriteLuminosity;
+								}
+							}
+							else
+							{
+								// Sprite is in front of background, it always shows
+								luminosity = spriteLuminosity;
+							}
+						}
+					}
+				}
+
+				r = luminosity;
+				g = luminosity;
+				b = luminosity;
 
 				*pARGB = 0xFF000000 | (r << 16) | (g << 8) | b;
 
