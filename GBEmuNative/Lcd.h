@@ -365,12 +365,8 @@ public:
 				{
 					// Sprites are active
 
-					if (LCDC & Bit2)
-					{
-						//@TODO: Bit 2 - OBJ(Sprite) Size(0 = 8x8, 1 = 8x16)
-						// Sprites are 8x16
-						DebugBreak();
-					}
+					bool sprites8x16 = ((LCDC & Bit2) != 0);
+					int maxY = sprites8x16 ? 16 : 8;
 
 					Sint16 bestBaseX;
 					int bestIndex = -1;
@@ -390,6 +386,36 @@ public:
 						Uint8 tileIndex = ReadOam(spriteBaseAddress + 2);
 						Uint8 attributes = ReadOam(spriteBaseAddress + 3);
 
+						bool verticalFlip = ((attributes & Bit6) != 0);
+
+						if (sprites8x16)
+						{
+							if (y >= 8)
+							{
+								y -= 8;
+								
+								if (!verticalFlip)
+								{
+									tileIndex |= 1;
+								}
+								else
+								{
+									tileIndex &= ~1;
+								}
+							}
+							else
+							{
+								if (!verticalFlip)
+								{
+									tileIndex &= ~1;
+								}
+								else
+								{
+									tileIndex |= 1;
+								}
+							}
+						}
+
 						// Horizontal flip
 						if (attributes & Bit5)
 						{
@@ -397,7 +423,7 @@ public:
 						}
 
 						// Vertical flip
-						if (attributes & Bit6)
+						if (verticalFlip)
 						{
 							y = 7 - y;
 						}
@@ -407,7 +433,6 @@ public:
 						Uint8 palette = ((attributes & Bit4) != 0) ? OBP1 : OBP0;
 						auto spriteLuminosity = GetLuminosityForColorIndex(palette, colorIndex);
 
-						//int maxY = 
 						if ((colorIndex != 0) && (x >= 0) && (x < 8) && (y >= 0) && (y < 8))
 						{
 							if ((bestIndex < 0) || (spriteBaseX < bestBaseX))
