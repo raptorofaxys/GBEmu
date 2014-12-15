@@ -44,6 +44,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <CustomBuildAfterTargets>Link</CustomBuildAfterTargets>
+    <TargetName>$(ProjectName)_$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -65,7 +66,7 @@
     <PostBuildEvent>
       <Command>echo Copying binaries to workingdir...
 @xcopy /y $(ProjectDir)\external\SDL2-2.0.3\VisualC\SDL\Win32\Release\SDL2.dll $(SolutionDir)\workingdir
-@xcopy /y $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
+@xcopy /y $(TargetPath) $(SolutionDir)\workingdir\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -88,7 +89,7 @@
     <PostBuildEvent>
       <Command>echo Copying binaries to workingdir...
 @xcopy /y $(ProjectDir)\external\SDL2-2.0.3\VisualC\SDL\Win32\Release\SDL2.dll $(SolutionDir)\workingdir
-@xcopy /y $(TargetPath) $(SolutionDir)\workingdir\$(TargetFileName)</Command>
+@xcopy /y $(TargetPath) $(SolutionDir)\workingdir\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

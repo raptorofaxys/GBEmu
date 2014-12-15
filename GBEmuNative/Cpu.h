@@ -75,6 +75,7 @@ public:
 		BC = 0x0013;
 		DE = 0x00D8;
 		HL = 0x014D;
+		SP = 0xFFFE;
 	}
 
 	Uint16 GetPC() const
@@ -1607,8 +1608,7 @@ private:
 	struct OpcodeMetadata
 	{
 		OpcodeMetadata()
-			: cycles(0)
-			, size(0)
+			: size(0)
 			, illegal(false)
 		{
 		}
@@ -1616,59 +1616,16 @@ private:
 		std::string baseMnemonic;
 		std::vector<std::string> inputs;
 		std::vector<std::string> outputs;
-		Uint8 cycles;
+		// Uint8 cycles; // this is conditional
 		Uint8 size;
 		bool illegal;
 	};
 
-	class TracingMemory : public IMemoryBusDevice
-	{
-	public:
-		void ResetForOpcode(Uint8 firstByte, Uint8 secondByte = 0)
-		{
-			m_values[0] = firstByte;
-			m_values[1] = secondByte;
-			m_numReads = 0;
-		}
-
-		Uint8 GetNumReads() const
-		{
-			return m_numReads;
-		}
-	
-	private:
-		virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
-		{
-			if (requestType == MemoryRequestType::Read)
-			{
-				if (address < ARRAY_SIZE(m_values))
-				{
-					value = m_values[address];
-				}
-				else
-				{
-					value = 0;
-				}
-				++m_numReads;
-				return true;
-			}
-			else
-			{
-				return true;
-			}
-
-			return false;
-		}
-
-		Uint8 m_values[2];
-		Uint8 m_numReads;
-	};
-
+	// The following functions were preprocessed using a spreadsheet from http://imrannazar.com/Gameboy-Z80-Opcode-Map and http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
 	const char* GetOpcodeMnemonic(Uint8 opcode)
 	{
 		static const char* opcodeMnemonics[256] =
 		{
-			// This was preprocessed using macros and a spreadsheet from http://imrannazar.com/Gameboy-Z80-Opcode-Map
 			"NOP", "LD BC,nn", "LD (BC),A", "INC BC", "INC B", "DEC B", "LD B,n", "RLC A", "LD (nn),SP", "ADD HL,BC", "LD A,(BC)", "DEC BC", "INC C", "DEC C", "LD C,n", "RRC A",
 			"STOP", "LD DE,nn", "LD (DE),A", "INC DE", "INC D", "DEC D", "LD D,n", "RL A", "JR n", "ADD HL,DE", "LD A,(DE)", "DEC DE", "INC E", "DEC E", "LD E,n", "RR A",
 			"JR NZ,n", "LD HL,nn", "LDI (HL),A", "INC HL", "INC H", "DEC H", "LD H,n", "DAA", "JR Z,n", "ADD HL,HL", "LDI A,(HL)", "DEC HL", "INC L", "DEC L", "LD L,n", "CPL",
@@ -1713,6 +1670,54 @@ private:
 		};
 
 		return extOpsMnemonics[opcode];
+	}
+
+	int GetOpcodeSize(Uint8 opcode)
+	{
+		static const Uint8 opcodeSizes[256] =
+		{
+			1,	3,	1,	1,	1,	1,	2,	1,	3,	1,	1,	1,	1,	1,	2,	1,
+			2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+			2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+			2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+			1,	1,	3,	3,	3,	1,	2,	1,	1,	1,	3,	1,	3,	3,	2,	1,
+			1,	1,	3,	0,	3,	1,	2,	1,	1,	1,	3,	0,	3,	0,	2,	1,
+			2,	1,	2,	0,	0,	1,	2,	1,	2,	1,	3,	0,	0,	0,	2,	1,
+			2,	1,	2,	1,	0,	1,	2,	1,	2,	1,	3,	1,	0,	0,	2,	1,
+		};
+		return opcodeSizes[opcode];
+	}
+
+	int GetExtendedOpcodeSize(Uint8 opcode)
+	{
+		static const Uint8 extOpsSizes[256] =
+		{
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+			2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,	2,
+		};
+		return extOpsSizes[opcode];
 	}
 
 	//std::string GetBaseMnemonic(const std::string& mnemonic)
@@ -1776,14 +1781,6 @@ private:
 	
 	void ComputeTracingData()
 	{
-		// Compute the size of each opcode
-		//auto oldMemory = m_pMemory;
-
-		//m_pMemory.reset(new MemoryBus());
-		//std::shared_ptr<TracingMemory> pTracingMemory(new TracingMemory());
-		//m_pMemory->AddDevice(pTracingMemory);
-		//m_pMemory->LockDevices();
-
 		// First, parse what we can from the static opcode metadata
 		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
 		{
@@ -1795,6 +1792,7 @@ private:
 
 			auto& meta = m_opcodeMetadata[opcode];
 			ParseMnemonic(GetOpcodeMnemonic(opcode), meta);
+			meta.size = GetOpcodeSize(opcode);
 		}
 		
 		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
@@ -1803,35 +1801,8 @@ private:
 			
 			auto& meta = m_extendedOpcodeMetadata[opcode];
 			ParseMnemonic(GetExtendedOpcodeMnemonic(opcode), meta);
+			meta.size = GetExtendedOpcodeSize(opcode);
 		}
-
-		//// Then, reflect the code by simulating the executing of each opcode
-		//for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
-		//{
-		//	Uint8 opcode = static_cast<Uint8>(opcode16);
-
-		//	if (IsExtendedOpcode(opcode))
-		//	{
-		//		continue;
-		//	}
-
-		//	auto& meta = m_opcodeMetadata[opcode];
-
-		//	//pTracingMemory->ResetForOpcode(opcode);
-		//	Reset();
-		//	PC = 0;
-
-		//	Uint8 cycles = 0;
-		//	if (!meta.illegal)
-		//	{
-		//		cycles = ExecuteSingleInstruction();
-		//	}
-		//	meta.cycles = cycles;
-		//	//@TODO: get rid of this; it is broken
-		//	//meta.size = pTracingMemory->GetNumReads();
-		//}
-
-		//m_pMemory = oldMemory;
 	}
 
 	void DebugOpcode(Uint8 opcode)
