@@ -146,5 +146,5 @@ private:
 	Uint8 m_externalRam[kExternalRamSize];
 	BankingMode m_bankingMode;
 	int m_romBankLower5Bits;
-	int m_romRam2Bits; // this register truly defines proper naming
+	int m_romRam2Bits; // this register truly defies proper naming
 };

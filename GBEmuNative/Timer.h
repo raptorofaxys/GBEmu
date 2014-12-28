@@ -58,11 +58,13 @@ public:
 
 			while (m_TimaTicksRemaining > 1.0f)
 			{
+				// Handle overflow
 				if (TIMA == 0xFF)
 				{
 					TIMA = TMA;
 					m_pCpu->SignalInterrupt(Bit2);
 				}
+
 				++TIMA;
 				m_TimaTicksRemaining -= 1.0f;
 			}

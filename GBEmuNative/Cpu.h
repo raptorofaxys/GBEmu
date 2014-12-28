@@ -26,8 +26,6 @@ namespace FlagBitMask
 	};
 }
 
-//class OpcodeTestMemoryBus
-
 class Cpu : public IMemoryBusDevice
 {
 public:
@@ -951,7 +949,7 @@ private:
 		// We have a few options for implementing opcode lookup and execution.  My goals are:
 		// -first, to have fun with C++
 		// -next, to avoid repetition, thus factoring as much as possible
-		// -lastly, to generate relatively good code if that doesn't mean intefering with the previous two goals
+		// -lastly, to generate relatively good machine code if that doesn't mean intefering with the previous two goals
 		//
 		// I do care about readability and maintainability, but this is a weekend exercise with no other developers, and I don't mind winding up with something a bit abstruse if it means the above goals are met.
 		// 

@@ -66,7 +66,6 @@ public:
 		}
 
 		SDL_assert(m_devicesLocked);
-		//EnsureDeviceIsProbed(address);
 		const auto& deviceIndex = m_deviceIndexAtAddress[address];
 		if (deviceIndex >= 0)
 		{
@@ -107,7 +106,6 @@ public:
 		}
 
 		SDL_assert(m_devicesLocked);
-		//EnsureDeviceIsProbed(address);
 		const auto& deviceIndex = m_deviceIndexAtAddress[address];
 		if (deviceIndex >= 0)
 		{
@@ -145,8 +143,6 @@ private:
 			//for (size_t i = 0; i < m_devicesUnsafe.size(); ++i) // 10-12x slower
 
 			// About the same speed as the range-based for in release
-			//@OPTIMIZE: cache which device is used for which address, either on first access or once for all address at the start.  Then prevent calls to AddDevice.
-			//@TODO: can even verify that exactly one device handles each address, to make sure there are no overlapping ranges being handled
 			//auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
 			//for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
 			auto numDevices = m_devicesUnsafe.size();

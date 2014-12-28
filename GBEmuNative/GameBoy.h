@@ -159,7 +159,6 @@ public:
 		while (m_cyclesRemaining > 0)
 		{
 			auto instructionCycles = m_pCpu->ExecuteSingleInstruction();
-			//auto instructionCycles = 4;
 			m_totalCyclesExecuted += instructionCycles;
 			g_totalCyclesExecuted += instructionCycles;
 			m_cyclesRemaining -= instructionCycles;

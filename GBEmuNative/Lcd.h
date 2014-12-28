@@ -215,7 +215,7 @@ public:
 				Uint32* pARGB = reinterpret_cast<Uint32*>(pPixels + y * pitch + x * 4);
 				
 				Uint8 r = 0xFF;
-				Uint8 g = 0x00;
+				Uint8 g = 0xFF; //0x00;
 				Uint8 b = 0xFF;
 				*pARGB = 0xFF000000 | (r << 16) | (g << 8) | b;
 			}
@@ -366,7 +366,6 @@ public:
 					// Sprites are active
 
 					bool sprites8x16 = ((LCDC & Bit2) != 0);
-					int maxY = sprites8x16 ? 16 : 8;
 
 					Sint16 bestBaseX;
 					int bestIndex = -1;
