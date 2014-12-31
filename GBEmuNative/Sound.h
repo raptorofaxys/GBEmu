@@ -13,7 +13,8 @@
 class Sound : public IMemoryBusDevice
 {
 public:
-	// Implemented loosely following http://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware
+	// Implemented loosely following http://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware.  There are many strange behaviours
+	// in the DMG hardware; this code is commented very loosely, and readers should refer to the above page for further details.
 
 	enum class Registers
 	{
@@ -44,9 +45,188 @@ public:
 		NR52 = 0xFF26, 	// Sound: sound on/off
 	};
 
-	//struct SquareWaveGenerator
-	//{
-	//};
+	class SquareWaveGenerator
+	{
+	public:
+		SquareWaveGenerator(const Uint8& NRx1, const Uint8& NRx3, const Uint8& NRx4)
+			: m_NRx1(NRx1)
+			, m_NRx3(NRx3)
+			, m_NRx4(NRx4)
+		{
+			Reset();
+		}
+
+		Uint16 GetFrequencyTimerPeriod() const
+		{
+			// MSB are in NRx4, LSB are in NRx3
+			return static_cast<Uint16>(((m_NRx4 & 0x7) << 8)) | m_NRx3;
+		}
+
+		void Reset()
+		{
+			m_frequencyTimerCounter = GetFrequencyTimerPeriod();
+			m_samplePosition = 0;
+		}
+
+		void Tick()
+		{
+			if (m_frequencyTimerCounter == 0)
+			{
+				m_frequencyTimerCounter = (2048 - GetFrequencyTimerPeriod()) * 4;
+				
+				// The generator has eight steps
+				m_samplePosition = (m_samplePosition + 1) % 8;
+			}
+			else
+			{
+				--m_frequencyTimerCounter;
+			}
+		}
+
+		Sint16 GetOutput() const
+		{
+			static Uint8 duties[4][8] =
+			{
+				{ 0, 0, 0, 0, 0, 0, 0, 1},
+				{ 1, 0, 0, 0, 0, 0, 0, 1},
+				{ 1, 0, 0, 0, 0, 1, 1, 1},
+				{ 0, 1, 1, 1, 1, 1, 1, 0}
+			};
+
+			int duty = (m_NRx1 & 0xC0) >> 6;
+
+			return duties[duty][m_samplePosition] ? 1 : -1;
+		}
+		
+	private:
+		const Uint8& m_NRx1;
+		const Uint8& m_NRx3;
+		const Uint8& m_NRx4;
+
+		Uint16 m_frequencyTimerCounter;
+		Uint8 m_samplePosition;
+	};
+
+	class LengthCounter
+	{
+	public:
+		LengthCounter(const Uint8& NRx1, const Uint8& NRx4)
+			: m_NRx1(NRx1)
+			, m_NRx4(NRx4)
+		{
+			ResetLength();
+		}
+
+		void ResetLength()
+		{
+			m_ch2LengthCounter = 64 - (m_NRx1 & 0x3F);
+		}
+
+		void Enable()
+		{
+			m_enabled = true;
+			if (m_ch2LengthCounter == 0)
+			{
+				m_ch2LengthCounter = 64;
+			}
+		}
+
+		bool IsChannelEnabled() const
+		{
+			return m_enabled;
+		}
+
+		void Tick()
+		{
+			if (m_NRx4 & Bit6)
+			{
+				if (m_ch2LengthCounter > 0)
+				{
+					--m_ch2LengthCounter;
+					if (m_ch2LengthCounter == 0)
+					{
+						// If the length has expired, turn the channel off
+						m_enabled = false;
+					}
+				}
+			}
+		}
+
+	private:
+		const Uint8& m_NRx1;
+		const Uint8& m_NRx4;
+
+		bool m_enabled;
+		Uint8 m_ch2LengthCounter;
+	};
+	
+	class VolumeEnvelope
+	{
+	public:
+		VolumeEnvelope(const Uint8& NRx2)
+			: m_NRx2(NRx2)
+		{
+		}
+
+		Uint8 GetVolumeTimerPeriod() const
+		{
+			return m_NRx2 & 0x7;
+		}
+
+		Uint8 GetInitialVolume() const
+		{
+			return (m_NRx2 & 0xF0) >> 4;
+		}
+
+		void Reset()
+		{
+			m_volumeCounter = GetVolumeTimerPeriod();
+			m_volume = GetInitialVolume();
+		}
+
+		Uint8 GetVolume() const
+		{
+			return m_volume;
+		}
+
+		void Tick()
+		{
+			if (GetVolumeTimerPeriod() > 0)
+			{
+				if (m_volumeCounter > 0)
+				{
+					--m_volumeCounter;
+					if (m_volumeCounter == 0)
+					{
+						if (m_NRx2 & Bit3)
+						{
+							// Increase volume
+							if (m_volume < 0xF)
+							{
+								++m_volume;
+							}
+						}
+						else
+						{
+							// Decrease volume
+							if (m_volume > 0)
+							{
+								--m_volume;
+							}
+						}
+
+						m_volumeCounter = GetVolumeTimerPeriod();
+					}
+				}
+			}
+		}
+
+	private:
+		const Uint8& m_NRx2;
+
+		Uint8 m_volumeCounter;
+		Uint8 m_volume;
+	};
 
 	static const int kWaveRamBase = 0xFF30;
 	static const int kWaveRamSize = 0xFF3F - kWaveRamBase + 1;
@@ -60,11 +240,13 @@ public:
 	static void AudioCallback(void* userdata, Uint8* pStream8, int numBytes)
 	{
 		Sint16* pStream16 = reinterpret_cast<Sint16*>(pStream8);
-		//const int numSamplesPerChannel = numBytes / sizeof(Sint16) / 2;
 		reinterpret_cast<Sound*>(userdata)->FillStreamBuffer(pStream16, numBytes);
 	}
 	
 	Sound()
+		: m_ch2Generator(NR21, NR23, NR24)
+		, m_ch2LengthCounter(NR21, NR24)
+		, m_ch2VolumeEnvelope(NR22)
 	{
 		if (SDL_GetNumAudioDevices(0) > 0)
 		{
@@ -110,11 +292,6 @@ public:
 		m_updateTimeLeft = 0.0f;
 		m_sampleTimeLeft = 0.0f;
 
-		//m_ch2Active = false;
-		//m_ch2SamplePosition = 0.0f;
-		//m_ch2LengthTimer = 0.0f;
-		//m_ch2EnvelopeTimer = 0.0f;
-	
 		NR10 = 0x80;
 		NR11 = 0xBF;
 		NR12 = 0xF3;
@@ -157,13 +334,9 @@ public:
 
 		m_sampleTimeStep = 1.0f / kDeviceFrequency;
 
-		m_ch2FrequencyTimerCounter = 0;
-		m_ch2SamplePosition = 0;
-
-		m_ch2LengthCounter = 0;
-
-		m_ch2VolumeCounter = 0;
-		m_ch2Volume = 0;
+		m_ch2Generator.Reset();
+		m_ch2LengthCounter.ResetLength();
+		m_ch2VolumeEnvelope.Reset();
 
 		if (m_deviceId != 0)
 		{
@@ -174,80 +347,19 @@ public:
 		m_traceLog.clear();
 	}
 
-	Uint16 GetCh2FrequencyTimerPeriod() const
-	{
-		return static_cast<Uint16>(((NR24 & 0x7) << 8)) | NR23;
-	}
-
-	Uint8 GetCh2VolumeTimerPeriod() const
-	{
-		return NR22 & 0x7;
-	}
-
-	Uint8 GetCh2InitialVolume() const
-	{
-		return (NR22 & 0xF0) >> 4;
-	}
-
 	void OnMasterTick()
 	{
-		if (m_ch2FrequencyTimerCounter == 0)
-		{
-			m_ch2FrequencyTimerCounter = (2048 - GetCh2FrequencyTimerPeriod()) * 4;
-			m_ch2SamplePosition = (m_ch2SamplePosition + 1) % 8;
-		}
-		else
-		{
-			--m_ch2FrequencyTimerCounter;
-		}
+		m_ch2Generator.Tick();
 	}
 
 	void OnLengthTick()
 	{
-		// Length counter
-		if (NR24 & Bit6)
-		{
-			if (m_ch2LengthCounter > 0)
-			{
-				--m_ch2LengthCounter;
-				if (m_ch2LengthCounter == 0)
-				{
-					m_ch2Enabled = false;
-				}
-			}
-		}
+		m_ch2LengthCounter.Tick();
 	}
 
 	void OnVolumeEnvelopeTick()
 	{
-		if (GetCh2VolumeTimerPeriod() > 0)
-		{
-			if (m_ch2VolumeCounter > 0)
-			{
-				--m_ch2VolumeCounter;
-				if (m_ch2VolumeCounter == 0)
-				{
-					if (NR22 & Bit3)
-					{
-						// Increase volume
-						if (m_ch2Volume < 0xF)
-						{
-							++m_ch2Volume;
-						}
-					}
-					else
-					{
-						// Decrease volume
-						if (m_ch2Volume > 0)
-						{
-							--m_ch2Volume;
-						}
-					}
-
-					m_ch2VolumeCounter = GetCh2VolumeTimerPeriod();
-				}
-			}
-		}
+		m_ch2VolumeEnvelope.Tick();
 	}
 
 	void OnSweepEnvelopeTick()
@@ -256,6 +368,7 @@ public:
 
 	void OnSequencerTick()
 	{
+		// Emulate the tick sequence as per the hardware docs
 		if (m_sequencerCounter % 2)
 		{
 			OnLengthTick();
@@ -313,19 +426,10 @@ public:
 						? &m_backBuffers[(m_nextBackBufferToTransfer + 1) % 2][m_numMonoSamplesAvailable - kDeviceBufferNumMonoSamples]
 						: &m_backBuffers[m_nextBackBufferToTransfer][m_numMonoSamplesAvailable];
 
-					static Uint8 duties[4][8] =
-					{
-						{ 0, 0, 0, 0, 0, 0, 0, 1},
-						{ 1, 0, 0, 0, 0, 0, 0, 1},
-						{ 1, 0, 0, 0, 0, 1, 1, 1},
-						{ 0, 1, 1, 1, 1, 1, 1, 0}
-					};
-
-					int ch2Duty = (NR21 & 0xC0) >> 6;
-					Sint16 ch2Value = duties[ch2Duty][m_ch2SamplePosition] ? m_ch2Volume : -m_ch2Volume;
+					Sint16 ch2Value = m_ch2Generator.GetOutput() * m_ch2VolumeEnvelope.GetVolume();
 					ch2Value *= 32767 / 0xF;
 
-					if (!m_ch2Enabled)
+					if (!m_ch2LengthCounter.IsChannelEnabled())
 					{
 						ch2Value = 0;
 					}
@@ -404,100 +508,6 @@ public:
 			memset(pBuffer, 0, kDeviceBufferByteSize);
 		}
 
-		//static int count = 0;
-		//++count;
-		//if (count == 4)
-		//{
-		//	//DebugBreak();
-		//}
-
-		//const float timeStep = 1.0f / kDeviceFrequency;
-		//const float lengthTimeStep = 1.0f / 256.0f;
-		//const float envelopeTimeStep = 1.0f / 64.0f;
-
-		//int ch2Duty = (NR21 & 0xC0) >> 6;
-		//int ch2Length = (NR21 & 0x3F);
-		//float ch2Frequency = 131072.0f / (2048 - ch2FrequencyValue);
-		//int ch2Volume = ((NR22 & 0xF0) >> 4);
-		//int ch2EnvelopeStepLength = (NR22 & 0x7);
-
-		//float dummy = 0.0;
-
-		////@TODO: handle this when the value is written to the register
-		//if (NR24 & Bit7)
-		//{
-		//	m_ch2Active = true;
-		//	NR24 &= ~Bit7;
-		//	ch2Length = 0;
-		//}
-
-		////m_ch2Active = true;
-		////ch2Length = 0;
-		////ch2Duty = 2;
-		////ch2Frequency = 220.0f;
-		////ch2Volume = 0x3;
-		////m_ch2EnvelopeTimer = -999.0f;
-
-		//for (int i = 0; i < numSamplesPerChannel; ++i)
-		//{
-		//	m_ch2SamplePosition += timeStep * ch2Frequency;
-		//	m_ch2SamplePosition = modff(m_ch2SamplePosition, &dummy);
-
-		//	m_ch2LengthTimer += timeStep;
-		//	if (m_ch2LengthTimer > 0.0f)
-		//	{
-		//		m_ch2LengthTimer -= lengthTimeStep;
-		//		if ((ch2Length == 63) && ((NR24 & Bit6) != 0))
-		//		{
-		//			// Stop the sound when the timer expires if the sound is not set to loop forever
-		//			m_ch2Active = false;
-		//		}
-		//		else
-		//		{
-		//			++ch2Length;
-		//			NR21 = (NR21 & 0xC) | ch2Length;
-		//		}
-		//	}
-
-		//	if (ch2EnvelopeStepLength > 0)
-		//	{
-		//		m_ch2EnvelopeTimer += (timeStep / ch2EnvelopeStepLength);
-		//		if (m_ch2EnvelopeTimer > 0.0f)
-		//		{
-		//			m_ch2EnvelopeTimer -= envelopeTimeStep;
-		//			if (NR22 & Bit3)
-		//			{
-		//				// Increase volume
-		//				if (ch2Volume < 0xF)
-		//				{
-		//					++ch2Volume;
-		//				}
-		//			}
-		//			else
-		//			{
-		//				if (ch2Volume > 0)
-		//				{
-		//					--ch2Volume;
-		//				}
-		//			}
-		//			NR22 = (NR22 & 0x0F) | (ch2Volume << 4);
-		//		}
-		//	}
-		//	else
-		//	{
-		//		m_ch2EnvelopeTimer = 0.0f;
-		//	}
-
-
-		//	auto sampleIndex = static_cast<int>(m_ch2SamplePosition * ARRAY_SIZE(duties[0]));
-		//	Sint16 ch2Value = 0;
-		//	if (m_ch2Active)
-		//	{
-		//		ch2Value = duties[ch2Duty][sampleIndex] ? ch2Volume : -ch2Volume;
-		//		//ch2Value = static_cast<int>(sinf(m_ch2SamplePosition * 2 * M_PI) * 32000.0f);
-		//		ch2Value *= 32767 / 0xF;
-		//	}
-
 		//	static int logSkip = 0;
 		//	++logSkip;
 		//	if (logSkip % 32 == 0)
@@ -514,14 +524,6 @@ public:
 		//	static float hpf = 0.0f;
 		//	hpf = (hpf + (lpf - lastLpf)) * hpAlpha;
 		//	lastLpf = lpf;
-
-		//	//*pBuffer = ch2Value;
-		//	*pBuffer = static_cast<int>(hpf);
-		//	++pBuffer;
-		//	//*pBuffer = ch2Value;
-		//	*pBuffer = static_cast<int>(hpf);
-		//	++pBuffer;
-		//}
 	}
 
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
@@ -550,7 +552,7 @@ public:
 					{
 						NR21 = value;
 
-						m_ch2LengthCounter = 64 - (NR21 & 0x3F);
+						m_ch2LengthCounter.ResetLength();
 					}
 					return true;
 				}
@@ -594,14 +596,10 @@ public:
 						if (NR24 & Bit7)
 						{
 							// Channel is now enabled
-							m_ch2Enabled = true;
-							if (m_ch2LengthCounter == 0)
-							{
-								m_ch2LengthCounter = 64;
-							}
-							m_ch2FrequencyTimerCounter = GetCh2FrequencyTimerPeriod();
-							m_ch2VolumeCounter = GetCh2VolumeTimerPeriod();
-							m_ch2Volume = GetCh2InitialVolume();
+
+							m_ch2Generator.Reset();
+							m_ch2LengthCounter.Enable();
+							m_ch2VolumeEnvelope.Reset();
 							//@TODO: Noise channel's LFSR bits are all set to 1.
 							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 							//@TODO: Square 1's sweep does several things (see frequency sweep).
@@ -645,23 +643,11 @@ private:
 	Uint16 m_masterCounter;
 	Uint16 m_sequencerCounter;
 	float m_sampleTimeStep;
-	//bool m_ch2Active;
-	//float m_ch2SamplePosition;
-	//float m_ch2LengthTimer;
-	//float m_ch2EnvelopeTimer;
 
-	bool m_ch2Enabled;
-
-	Uint16 m_ch2FrequencyTimerCounter;
-	Uint8 m_ch2SamplePosition;
+	SquareWaveGenerator m_ch2Generator;
+	LengthCounter m_ch2LengthCounter;
+	VolumeEnvelope m_ch2VolumeEnvelope;
 	
-	Uint8 m_ch2LengthCounter;
-	
-	Uint8 m_ch2VolumeCounter;
-	Uint8 m_ch2Volume;
-	
-	//Uint8 m_ch2LengthTimerCounter;
-
 	Uint8 NR10;
 	Uint8 NR11;
 	Uint8 NR12;
