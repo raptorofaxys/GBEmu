@@ -114,20 +114,22 @@ public:
 			: m_NRx1(NRx1)
 			, m_NRx4(NRx4)
 		{
+			m_enabled = false;
 			ResetLength();
 		}
 
 		void ResetLength()
 		{
-			m_ch2LengthCounter = 64 - (m_NRx1 & 0x3F);
+			m_lengthCounter = 64 - (m_NRx1 & 0x3F);
+			UpdateEnabledStatusFromLength();
 		}
 
 		void Enable()
 		{
 			m_enabled = true;
-			if (m_ch2LengthCounter == 0)
+			if (m_lengthCounter == 0)
 			{
-				m_ch2LengthCounter = 64;
+				m_lengthCounter = 64;
 			}
 		}
 
@@ -140,15 +142,20 @@ public:
 		{
 			if (m_NRx4 & Bit6)
 			{
-				if (m_ch2LengthCounter > 0)
+				if (m_lengthCounter > 0)
 				{
-					--m_ch2LengthCounter;
-					if (m_ch2LengthCounter == 0)
-					{
-						// If the length has expired, turn the channel off
-						m_enabled = false;
-					}
+					--m_lengthCounter;
+					UpdateEnabledStatusFromLength();
 				}
+			}
+		}
+
+		void UpdateEnabledStatusFromLength()
+		{
+			if (m_lengthCounter == 0)
+			{
+				// If the length has expired, turn the channel off
+				m_enabled = false;
 			}
 		}
 
@@ -157,7 +164,7 @@ public:
 		const Uint8& m_NRx4;
 
 		bool m_enabled;
-		Uint8 m_ch2LengthCounter;
+		Uint8 m_lengthCounter;
 	};
 	
 	class VolumeEnvelope
@@ -233,7 +240,7 @@ public:
 
 	static const int kDeviceFrequency = 44100;
 	static const int kDeviceNumChannels = 2;
-	static const int kDeviceNumBufferSamples = 8192; // below 512, things start to get dicey with xaudio on my hardware
+	static const int kDeviceNumBufferSamples = 1024; // below 1024, things start to get dicey with xaudio on my hardware
 	static const int kDeviceBufferNumMonoSamples = kDeviceNumChannels * kDeviceNumBufferSamples;
 	static const int kDeviceBufferByteSize = kDeviceBufferNumMonoSamples * sizeof(Sint16);
 
@@ -244,7 +251,10 @@ public:
 	}
 	
 	Sound()
-		: m_ch2Generator(NR21, NR23, NR24)
+		: m_ch1Generator(NR11, NR13, NR14)
+		, m_ch1LengthCounter(NR11, NR14)
+		, m_ch1VolumeEnvelope(NR12)
+		, m_ch2Generator(NR21, NR23, NR24)
 		, m_ch2LengthCounter(NR21, NR24)
 		, m_ch2VolumeEnvelope(NR22)
 	{
@@ -267,7 +277,6 @@ public:
 			if (deviceId != 0)
 			{
 				m_deviceId = deviceId;
-				SDL_PauseAudioDevice(deviceId, 0);
 			}
 		}
 
@@ -334,6 +343,10 @@ public:
 
 		m_sampleTimeStep = 1.0f / kDeviceFrequency;
 
+		m_ch1Generator.Reset();
+		m_ch1LengthCounter.ResetLength();
+		m_ch1VolumeEnvelope.Reset();
+
 		m_ch2Generator.Reset();
 		m_ch2LengthCounter.ResetLength();
 		m_ch2VolumeEnvelope.Reset();
@@ -349,16 +362,19 @@ public:
 
 	void OnMasterTick()
 	{
+		m_ch1Generator.Tick();
 		m_ch2Generator.Tick();
 	}
 
 	void OnLengthTick()
 	{
+		m_ch1LengthCounter.Tick();
 		m_ch2LengthCounter.Tick();
 	}
 
 	void OnVolumeEnvelopeTick()
 	{
+		m_ch1VolumeEnvelope.Tick();
 		m_ch2VolumeEnvelope.Tick();
 	}
 
@@ -426,13 +442,23 @@ public:
 						? &m_backBuffers[(m_nextBackBufferToTransfer + 1) % 2][m_numMonoSamplesAvailable - kDeviceBufferNumMonoSamples]
 						: &m_backBuffers[m_nextBackBufferToTransfer][m_numMonoSamplesAvailable];
 
-					Sint16 ch2Value = m_ch2Generator.GetOutput() * m_ch2VolumeEnvelope.GetVolume();
-					ch2Value *= 32767 / 0xF;
+					auto ComputeSquareChannelOutput = [&](SquareWaveGenerator g, LengthCounter l, VolumeEnvelope v)
+						{ 
+							Sint16 value = g.GetOutput() * v.GetVolume();
+							value *= 8191 / 0xF;
 
-					if (!m_ch2LengthCounter.IsChannelEnabled())
-					{
-						ch2Value = 0;
-					}
+							if (!l.IsChannelEnabled())
+							{
+								value = 0;
+							}
+
+							return value;
+						};
+
+					Sint16 ch1Value = ComputeSquareChannelOutput(m_ch1Generator, m_ch1LengthCounter, m_ch1VolumeEnvelope);
+					Sint16 ch2Value = ComputeSquareChannelOutput(m_ch2Generator, m_ch2LengthCounter, m_ch2VolumeEnvelope);
+
+					Sint16 finalValue = ch1Value + ch2Value;
 
 					//@TODO: mixing, etc.
 
@@ -441,8 +467,8 @@ public:
 					//f += m_sampleTimeStep;
 					//ch2Value = sinf(f * 220.0f * 2 * 3.14f) * 4000.0f;
 
-					*pCurrentSample++ = ch2Value;
-					*pCurrentSample++ = ch2Value; 
+					*pCurrentSample++ = finalValue;
+					*pCurrentSample++ = finalValue; 
 
 					//printf("Producer: %d mono samples available; adding 2. ", m_numMonoSamplesAvailable);
 					m_numMonoSamplesAvailable += 2;
@@ -537,10 +563,72 @@ public:
 			switch (address)
 			{
 			SERVICE_MMR_RW(NR10)
-			SERVICE_MMR_RW(NR11)
-			SERVICE_MMR_RW(NR12)
-			SERVICE_MMR_RW(NR13)
-			SERVICE_MMR_RW(NR14)
+
+			case Registers::NR11:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR11 | 0x3F;
+					}
+					else
+					{
+						NR11 = value;
+
+						m_ch1LengthCounter.ResetLength();
+					}
+					return true;
+				}
+				break;
+			case Registers::NR12:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR12 | 0x00;
+					}
+					else
+					{
+						NR12 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR13:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR13 | 0xFF;
+					}
+					else
+					{
+						NR13 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR14:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR14 | 0xBF;
+					}
+					else
+					{
+						NR14 = value;
+
+						if (NR14 & Bit7)
+						{
+							// Channel is now enabled
+							m_ch1Generator.Reset();
+							m_ch1LengthCounter.Enable();
+							m_ch1VolumeEnvelope.Reset();
+							//@TODO: Noise channel's LFSR bits are all set to 1.
+							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
+							//@TODO: Square 1's sweep does several things (see frequency sweep).
+						}
+					}
+					return true;
+				}
+				break;
 
 			case Registers::NR21:
 				{
@@ -596,7 +684,6 @@ public:
 						if (NR24 & Bit7)
 						{
 							// Channel is now enabled
-
 							m_ch2Generator.Reset();
 							m_ch2LengthCounter.Enable();
 							m_ch2VolumeEnvelope.Reset();
@@ -643,6 +730,10 @@ private:
 	Uint16 m_masterCounter;
 	Uint16 m_sequencerCounter;
 	float m_sampleTimeStep;
+
+	SquareWaveGenerator m_ch1Generator;
+	LengthCounter m_ch1LengthCounter;
+	VolumeEnvelope m_ch1VolumeEnvelope;
 
 	SquareWaveGenerator m_ch2Generator;
 	LengthCounter m_ch2LengthCounter;
