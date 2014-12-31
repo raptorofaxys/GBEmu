@@ -25,6 +25,9 @@ public:
 
 	static const int kAddressSpaceSize = 0x10000;
 
+	static Uint32 const kCyclesPerSecond = 4194304;
+
+
 	MemoryBus()
 	{
 		Reset();

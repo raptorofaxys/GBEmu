@@ -29,8 +29,6 @@ namespace FlagBitMask
 class Cpu : public IMemoryBusDevice
 {
 public:
-	static Uint32 const kCyclesPerSecond = 4194304;
-
 	enum class Registers
 	{
 		IF = 0xFF0F,	// Interrupt flag

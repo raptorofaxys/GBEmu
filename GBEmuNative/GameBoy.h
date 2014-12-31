@@ -152,9 +152,9 @@ public:
 		}
 
 		// CPU cycles are counted here, and not in the CPU, because they are the atom of emulator execution
-		m_cyclesRemaining += seconds * Cpu::kCyclesPerSecond;
+		m_cyclesRemaining += seconds * MemoryBus::kCyclesPerSecond;
 	
-		const float timePerClockCycle = 1.0f / Cpu::kCyclesPerSecond;
+		const float timePerClockCycle = 1.0f / MemoryBus::kCyclesPerSecond;
 
 		while (m_cyclesRemaining > 0)
 		{
