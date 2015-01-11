@@ -84,6 +84,11 @@ public:
 			return m_enabled;
 		}
 
+		Sint16 GetGatedSample(Sint16 sample) const
+		{
+			return m_enabled ? sample : 0;
+		}
+
 		void Tick()
 		{
 			if (m_NRx4 & Bit6)
@@ -138,9 +143,14 @@ public:
 			m_volume = GetInitialVolume();
 		}
 
-		Uint8 GetVolume() const
+		Uint8 GetVolume() const // 0-15
 		{
 			return m_volume;
+		}
+
+		Sint16 GetAttenuatedSample(Sint16 sample) const
+		{
+			return (static_cast<Sint32>(sample) * m_volume) / 0xF;
 		}
 
 		void Tick()
@@ -310,6 +320,10 @@ public:
 		bool m_enabled;
 	};
 
+	// 32-bit for convenience - mixing math will automatically be sign-extended to 32-bits
+	static Sint32 const MIN_GENERATOR_OUTPUT = -32768;
+	static Sint32 const MAX_GENERATOR_OUTPUT = 32767;
+
 	class SquareWaveGenerator
 	{
 	public:
@@ -379,7 +393,7 @@ public:
 
 			int duty = (m_NRx1 & 0xC0) >> 6;
 
-			return duties[duty][m_samplePosition] ? 1 : -1;
+			return (duties[duty][m_samplePosition] != 0) ? MAX_GENERATOR_OUTPUT : MIN_GENERATOR_OUTPUT;
 		}
 		
 	private:
@@ -457,7 +471,7 @@ public:
 
 		Sint16 GetOutput() const
 		{
-			return 1 ^ (m_lfsr & Bit0);
+			return ((1 ^ (m_lfsr & Bit0)) != 0) ? MAX_GENERATOR_OUTPUT : MIN_GENERATOR_OUTPUT;
 		}
 		
 	private:
@@ -527,7 +541,7 @@ public:
 				Uint8 sampleIndex = m_samplePosition >> 1;
 				Uint8 sample = ((m_samplePosition & 1) != 0) ? (m_pWaveRam[sampleIndex] & 0x0F) : ((m_pWaveRam[sampleIndex] >> 4) & 0xF);
 				m_output = sample >> GetVolumeShift(); // 0-15
-				m_output = -8192 + (m_output * (16384 / 15));
+				m_output = MIN_GENERATOR_OUTPUT + (m_output * ((MAX_GENERATOR_OUTPUT - MIN_GENERATOR_OUTPUT) / 15));
 			}
 		}
 
@@ -774,35 +788,44 @@ public:
 						? &m_backBuffers[(m_nextBackBufferToTransfer + 1) % 2][m_numMonoSamplesAvailable - kDeviceBufferNumMonoSamples]
 						: &m_backBuffers[m_nextBackBufferToTransfer][m_numMonoSamplesAvailable];
 
-					auto ComputeChannelOutput = [&](Uint16 generatorOutput, LengthCounter l, VolumeEnvelope v)
-						{ 
-							Sint16 value = generatorOutput * v.GetVolume();
-							value *= 8191 / 0xF;
-
-							if (!l.IsChannelEnabled())
-							{
-								value = 0;
-							}
-
-							return value;
-						};
-
-					Sint16 ch1Value = ComputeChannelOutput(m_ch1Generator.GetOutput(), m_ch1LengthCounter, m_ch1VolumeEnvelope);
-					Sint16 ch2Value = ComputeChannelOutput(m_ch2Generator.GetOutput(), m_ch2LengthCounter, m_ch2VolumeEnvelope);
-					Sint16 ch3Value = m_ch3LengthCounter.IsChannelEnabled() ? m_ch3Generator.GetOutput() : 0;
-					Sint16 ch4Value = ComputeChannelOutput(m_ch4Generator.GetOutput(), m_ch4LengthCounter, m_ch4VolumeEnvelope);
-
-					Sint16 finalValue = ch1Value + ch2Value + ch3Value + ch4Value;
-
-					//@TODO: mixing, etc.
+					Sint16 ch1Value = m_ch1LengthCounter.GetGatedSample(m_ch1VolumeEnvelope.GetAttenuatedSample(m_ch1Generator.GetOutput()));
+					Sint16 ch2Value = m_ch2LengthCounter.GetGatedSample(m_ch2VolumeEnvelope.GetAttenuatedSample(m_ch2Generator.GetOutput()));
+					Sint16 ch3Value = m_ch3LengthCounter.GetGatedSample(m_ch3Generator.GetOutput());
+					Sint16 ch4Value = m_ch4LengthCounter.GetGatedSample(m_ch4VolumeEnvelope.GetAttenuatedSample(m_ch4Generator.GetOutput()));
 
 					// Sine wave test
 					//static float f = 0.0f;
 					//f += m_sampleTimeStep;
 					//ch2Value = sinf(f * 220.0f * 2 * 3.14f) * 4000.0f;
 
-					*pCurrentSample++ = finalValue;
-					*pCurrentSample++ = finalValue; 
+					static int const preMixShift = 2;
+					ch1Value >>= preMixShift;
+					ch2Value >>= preMixShift;
+					ch3Value >>= preMixShift;
+					ch4Value >>= preMixShift;
+
+					Sint16 leftValue = 0;
+					Sint16 rightValue = 0;
+
+					if (NR52 & Bit7)
+					{
+						if (NR51 & Bit7) leftValue += ch4Value;
+						if (NR51 & Bit6) leftValue += ch3Value;
+						if (NR51 & Bit5) leftValue += ch2Value;
+						if (NR51 & Bit4) leftValue += ch1Value;
+						if (NR51 & Bit3) rightValue += ch4Value;
+						if (NR51 & Bit2) rightValue += ch3Value;
+						if (NR51 & Bit1) rightValue += ch2Value;
+						if (NR51 & Bit0) rightValue += ch1Value;
+					}
+
+					Sint16 leftVolume = (NR50 >> 4) & 0x7;
+					leftValue = (static_cast<Sint32>(leftValue) * leftVolume) / 0xF;
+					Sint16 rightVolume = (NR50 >> 0) & 0x7;
+					rightValue = (static_cast<Sint32>(rightValue) * rightVolume) / 0xF;
+
+					*pCurrentSample++ = leftValue;
+					*pCurrentSample++ = rightValue; 
 
 					//printf("Producer: %d mono samples available; adding 2. ", m_numMonoSamplesAvailable);
 					m_numMonoSamplesAvailable += 2;
@@ -967,7 +990,6 @@ public:
 							m_ch1Generator.Reset();
 							m_ch1LengthCounter.Enable();
 							m_ch1VolumeEnvelope.Reset();
-							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 						}
 					}
 					return true;
@@ -1031,7 +1053,6 @@ public:
 							m_ch2Generator.Reset();
 							m_ch2LengthCounter.Enable();
 							m_ch2VolumeEnvelope.Reset();
-							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 						}
 					}
 					return true;
@@ -1107,7 +1128,6 @@ public:
 							// Channel is now enabled
 							m_ch3Generator.Reset();
 							m_ch3LengthCounter.Enable();
-							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 						}
 					}
 					return true;
@@ -1171,7 +1191,6 @@ public:
 							m_ch4Generator.Reset();
 							m_ch4LengthCounter.Enable();
 							m_ch4VolumeEnvelope.Reset();
-							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 						}
 					}
 					return true;
@@ -1179,7 +1198,23 @@ public:
 				break;
 			SERVICE_MMR_RW(NR50)
 			SERVICE_MMR_RW(NR51)
-			SERVICE_MMR_RW(NR52)
+			case Registers::NR52:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR52
+							| (m_ch1LengthCounter.IsChannelEnabled() ? Bit0 : 0)
+							| (m_ch2LengthCounter.IsChannelEnabled() ? Bit1 : 0)
+							| (m_ch3LengthCounter.IsChannelEnabled() ? Bit2 : 0)
+							| (m_ch4LengthCounter.IsChannelEnabled() ? Bit3 : 0);
+					}
+					else
+					{
+						NR52 = value & Bit7;
+					}
+					return true;
+				}
+				break;
 			}
 		}
 	
