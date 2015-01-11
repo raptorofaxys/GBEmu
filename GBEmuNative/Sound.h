@@ -50,9 +50,10 @@ public:
 	class LengthCounter
 	{
 	public:
-		LengthCounter(const Uint8& NRx1, const Uint8& NRx4)
+		LengthCounter(const Uint8& NRx1, const Uint8& NRx4, bool eightBitLengthMode)
 			: m_NRx1(NRx1)
 			, m_NRx4(NRx4)
+			, m_eightBitLengthMode(eightBitLengthMode)
 		{
 			m_enabled = false;
 			ResetLength();
@@ -60,7 +61,7 @@ public:
 
 		void ResetLength()
 		{
-			m_lengthCounter = 64 - (m_NRx1 & 0x3F);
+			m_lengthCounter = m_eightBitLengthMode ? m_NRx1 : (64 - (m_NRx1 & 0x3F));
 			UpdateEnabledStatusFromLength();
 		}
 
@@ -69,7 +70,7 @@ public:
 			m_enabled = true;
 			if (m_lengthCounter == 0)
 			{
-				m_lengthCounter = 64;
+				m_lengthCounter = m_eightBitLengthMode ? 256 : 64;
 			}
 		}
 
@@ -109,7 +110,8 @@ public:
 		const Uint8& m_NRx4;
 
 		bool m_enabled;
-		Uint8 m_lengthCounter;
+		bool m_eightBitLengthMode;
+		Uint16 m_lengthCounter;
 	};
 	
 	class VolumeEnvelope
@@ -429,6 +431,7 @@ public:
 		{
 			ResetTimerPeriodFromFrequency();
 			m_lfsr = 0xFFFF;
+			//m_lfsr = rand();
 		}
 
 		void Tick()
@@ -464,6 +467,87 @@ public:
 		Uint16 m_frequencyTimerCounter;
 	};
 
+	class WavetableGenerator
+	{
+	public:
+		WavetableGenerator(const Uint8& NRx0, const Uint8& NRx2, const Uint8& NRx3, const Uint8& NRx4, const Uint8* pWaveRam)
+			: m_NRx0(NRx0)
+			, m_NRx2(NRx2)
+			, m_NRx3(NRx3)
+			, m_NRx4(NRx4)
+			, m_pWaveRam(pWaveRam)
+		{
+			m_output = 0; // Not part of Reset
+			Reset();
+		}
+
+		bool IsEnabled() const
+		{
+			return (m_NRx0 & Bit7) != 0;
+		}
+
+		Uint16 GetDefaultFrequency() const
+		{
+			// MSB are in NRx4, LSB are in NRx3
+			return static_cast<Uint16>(((m_NRx4 & 0x7) << 8)) | m_NRx3;
+		}
+
+		Uint8 GetVolumeShift() const
+		{
+			Uint8 code = (m_NRx2 >> 5) & 0x3;
+			static Uint8 volumeShifts[] = {4, 0, 1, 2};
+			return volumeShifts[code];
+		}
+
+		Uint16 GetTimerPeriodFromFrequency(Uint16 frequency) const
+		{
+			return (2048 - frequency) * 2;
+		}
+
+		void ResetTimerPeriodFromFrequency()
+		{
+			m_frequencyTimerCounter = GetTimerPeriodFromFrequency(GetDefaultFrequency());
+		}
+
+		void Reset()
+		{
+			ResetTimerPeriodFromFrequency();
+			m_samplePosition = 0;
+		}
+
+		void Tick()
+		{
+			SDL_assert(m_frequencyTimerCounter > 0);
+			--m_frequencyTimerCounter;
+			if (m_frequencyTimerCounter == 0)
+			{
+				ResetTimerPeriodFromFrequency();
+
+				m_samplePosition = (m_samplePosition + 1) % 32;
+				Uint8 sampleIndex = m_samplePosition >> 1;
+				Uint8 sample = ((m_samplePosition & 1) != 0) ? (m_pWaveRam[sampleIndex] & 0x0F) : ((m_pWaveRam[sampleIndex] >> 4) & 0xF);
+				m_output = sample >> GetVolumeShift(); // 0-15
+				m_output = -8192 + (m_output * (16384 / 15));
+			}
+		}
+
+		Sint16 GetOutput() const
+		{
+			return IsEnabled() ? m_output : 0;
+		}
+		
+	private:
+		const Uint8& m_NRx0;
+		const Uint8& m_NRx2;
+		const Uint8& m_NRx3;
+		const Uint8& m_NRx4;
+
+		Uint16 m_frequencyTimerCounter;
+		Uint8 m_samplePosition;
+		Sint16 m_output;
+		const Uint8* m_pWaveRam;
+	};
+	
 	static const int kWaveRamBase = 0xFF30;
 	static const int kWaveRamSize = 0xFF3F - kWaveRamBase + 1;
 
@@ -482,13 +566,15 @@ public:
 	Sound()
 		: m_ch1Sweep(NR10, NR13, NR14, m_ch1LengthCounter)
 		, m_ch1Generator(NR11, NR13, NR14)
-		, m_ch1LengthCounter(NR11, NR14)
+		, m_ch1LengthCounter(NR11, NR14, false)
 		, m_ch1VolumeEnvelope(NR12)
 		, m_ch2Generator(NR21, NR23, NR24)
-		, m_ch2LengthCounter(NR21, NR24)
+		, m_ch2LengthCounter(NR21, NR24, false)
 		, m_ch2VolumeEnvelope(NR22)
+		, m_ch3Generator(NR30, NR32, NR33, NR34, m_waveRam)
+		, m_ch3LengthCounter(NR31, NR34, true)
 		, m_ch4Generator(NR43)
-		, m_ch4LengthCounter(NR41, NR44)
+		, m_ch4LengthCounter(NR41, NR44, false)
 		, m_ch4VolumeEnvelope(NR42)
 	{
 		if (SDL_GetNumAudioDevices(0) > 0)
@@ -584,6 +670,9 @@ public:
 		m_ch2LengthCounter.ResetLength();
 		m_ch2VolumeEnvelope.Reset();
 
+		m_ch3Generator.Reset();
+		m_ch3LengthCounter.ResetLength();
+
 		m_ch4Generator.Reset();
 		m_ch4LengthCounter.ResetLength();
 		m_ch4VolumeEnvelope.Reset();
@@ -601,6 +690,7 @@ public:
 	{
 		m_ch1Generator.Tick();
 		m_ch2Generator.Tick();
+		m_ch3Generator.Tick();
 		m_ch4Generator.Tick();
 	}
 
@@ -608,6 +698,7 @@ public:
 	{
 		m_ch1LengthCounter.Tick();
 		m_ch2LengthCounter.Tick();
+		m_ch3LengthCounter.Tick();
 		m_ch4LengthCounter.Tick();
 	}
 
@@ -615,6 +706,7 @@ public:
 	{
 		m_ch1VolumeEnvelope.Tick();
 		m_ch2VolumeEnvelope.Tick();
+		m_ch4VolumeEnvelope.Tick();
 	}
 
 	void OnSweepEnvelopeTick()
@@ -697,9 +789,10 @@ public:
 
 					Sint16 ch1Value = ComputeChannelOutput(m_ch1Generator.GetOutput(), m_ch1LengthCounter, m_ch1VolumeEnvelope);
 					Sint16 ch2Value = ComputeChannelOutput(m_ch2Generator.GetOutput(), m_ch2LengthCounter, m_ch2VolumeEnvelope);
+					Sint16 ch3Value = m_ch3LengthCounter.IsChannelEnabled() ? m_ch3Generator.GetOutput() : 0;
 					Sint16 ch4Value = ComputeChannelOutput(m_ch4Generator.GetOutput(), m_ch4LengthCounter, m_ch4VolumeEnvelope);
 
-					Sint16 finalValue = ch1Value + ch2Value + ch4Value;
+					Sint16 finalValue = ch1Value + ch2Value + ch3Value + ch4Value;
 
 					//@TODO: mixing, etc.
 
@@ -945,11 +1038,81 @@ public:
 				}
 				break;
 
-			SERVICE_MMR_RW(NR30)
-			SERVICE_MMR_RW(NR31)
-			SERVICE_MMR_RW(NR32)
-			SERVICE_MMR_RW(NR33)
-			SERVICE_MMR_RW(NR34)
+			case Registers::NR30:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR30 | 0x7F;
+					}
+					else
+					{
+						NR30 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR31:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR31 | 0xFF;
+					}
+					else
+					{
+						NR31 = value;
+
+						m_ch3LengthCounter.ResetLength();
+					}
+					return true;
+				}
+				break;
+			case Registers::NR32:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR32 | 0x9F;
+					}
+					else
+					{
+						NR32 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR33:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR33 | 0xFF;
+					}
+					else
+					{
+						NR33 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR34:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR34 | 0xBF;
+					}
+					else
+					{
+						NR34 = value;
+
+						if (NR34 & Bit7)
+						{
+							// Channel is now enabled
+							m_ch3Generator.Reset();
+							m_ch3LengthCounter.Enable();
+							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
+						}
+					}
+					return true;
+				}
+				break;
 
 			case Registers::NR41:
 				{
@@ -1046,6 +1209,9 @@ private:
 	SquareWaveGenerator m_ch2Generator;
 	LengthCounter m_ch2LengthCounter;
 	VolumeEnvelope m_ch2VolumeEnvelope;
+	
+	WavetableGenerator m_ch3Generator;
+	LengthCounter m_ch3LengthCounter;
 	
 	NoiseGenerator m_ch4Generator;
 	LengthCounter m_ch4LengthCounter;
