@@ -10,6 +10,8 @@
 #pragma optimize("", off)
 #endif
 
+//#define FORCENOINLINE __declspec(noinline)
+
 class Sound : public IMemoryBusDevice
 {
 public:
@@ -45,68 +47,6 @@ public:
 		NR52 = 0xFF26, 	// Sound: sound on/off
 	};
 
-	class SquareWaveGenerator
-	{
-	public:
-		SquareWaveGenerator(const Uint8& NRx1, const Uint8& NRx3, const Uint8& NRx4)
-			: m_NRx1(NRx1)
-			, m_NRx3(NRx3)
-			, m_NRx4(NRx4)
-		{
-			Reset();
-		}
-
-		Uint16 GetFrequencyTimerPeriod() const
-		{
-			// MSB are in NRx4, LSB are in NRx3
-			return static_cast<Uint16>(((m_NRx4 & 0x7) << 8)) | m_NRx3;
-		}
-
-		void Reset()
-		{
-			m_frequencyTimerCounter = GetFrequencyTimerPeriod();
-			m_samplePosition = 0;
-		}
-
-		void Tick()
-		{
-			if (m_frequencyTimerCounter == 0)
-			{
-				m_frequencyTimerCounter = (2048 - GetFrequencyTimerPeriod()) * 4;
-				
-				// The generator has eight steps
-				m_samplePosition = (m_samplePosition + 1) % 8;
-			}
-			else
-			{
-				--m_frequencyTimerCounter;
-			}
-		}
-
-		Sint16 GetOutput() const
-		{
-			static Uint8 duties[4][8] =
-			{
-				{ 0, 0, 0, 0, 0, 0, 0, 1},
-				{ 1, 0, 0, 0, 0, 0, 0, 1},
-				{ 1, 0, 0, 0, 0, 1, 1, 1},
-				{ 0, 1, 1, 1, 1, 1, 1, 0}
-			};
-
-			int duty = (m_NRx1 & 0xC0) >> 6;
-
-			return duties[duty][m_samplePosition] ? 1 : -1;
-		}
-		
-	private:
-		const Uint8& m_NRx1;
-		const Uint8& m_NRx3;
-		const Uint8& m_NRx4;
-
-		Uint16 m_frequencyTimerCounter;
-		Uint8 m_samplePosition;
-	};
-
 	class LengthCounter
 	{
 	public:
@@ -131,6 +71,11 @@ public:
 			{
 				m_lengthCounter = 64;
 			}
+		}
+
+		void Disable()
+		{
+			m_enabled = false;
 		}
 
 		bool IsChannelEnabled() const
@@ -235,6 +180,216 @@ public:
 		Uint8 m_volume;
 	};
 
+	class FrequencySweep
+	{
+	public:
+		// This unit really is super strange according to the docs... lots of little strange corner cases.  Used both http://problemkaputt.de/pandocs.htm and http://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware to cobble something together that sounded sort of OK.
+		FrequencySweep(const Uint8& NRx0, Uint8& NRx3, Uint8& NRx4, LengthCounter& lengthCounter)
+			: m_NRx0(NRx0)
+			, m_NRx3(NRx3)
+			, m_NRx4(NRx4)
+			, m_lengthCounter(lengthCounter)
+		{
+			Reset();
+		}
+
+		void Reset()
+		{
+			m_shadowFrequency = GetCurrentFrequency();
+			m_sweepTimer = GetSweepTimerPeriod();
+			m_enabled = (GetSweepTimerPeriod() != 0) && (GetSweepShift() != 0);
+			if (GetSweepShift() != 0)
+			{
+				ComputeNextFrequencyAndCheckForOverflow();
+			}
+		}
+
+		Uint16 GetCurrentFrequency() const
+		{
+			// MSB are in NRx4, LSB are in NRx3
+			return static_cast<Uint16>(((m_NRx4 & 0x7) << 8)) | m_NRx3;
+		}
+
+		void SetCurrentFrequency(Uint16 frequency) const
+		{
+			SDL_assert(frequency <= 2047);
+			Uint8 lsb = frequency & 0xFF;
+			Uint8 msb = (frequency >> 8) & 0x7;
+			// MSB are in NRx4, LSB are in NRx3
+			m_NRx3 = lsb;
+			m_NRx4 = (m_NRx4 & ~0x7) | msb;
+
+			if (GetCurrentFrequency() != frequency)
+			{
+				DebugBreak();
+			}
+		}
+
+		Uint8 GetSweepTimerPeriod() const
+		{
+			Uint8 result = (m_NRx0 & 0x70) >> 4;
+			if (result == 0)
+			{
+				result = 8;
+			}
+			return result;
+		}
+
+		Uint8 GetSweepShift() const
+		{
+			return (m_NRx0 & 0x7);
+		}
+
+		Sint16 GetSweepDirectionMultiplier() const
+		{
+			return ((m_NRx0 & Bit3) != 0) ? -1 : 1;
+		}
+
+
+		Uint16 ComputeNextFrequency() const
+		{
+			if (GetSweepShift() == 0)
+			{
+				return m_shadowFrequency;
+			}
+
+			Sint16 delta = m_shadowFrequency >> GetSweepShift();
+			delta *= GetSweepDirectionMultiplier();
+			Uint16 result = m_shadowFrequency + delta;
+			return result;
+		}
+
+		void PerformOverflowCheck(Uint16 frequency) const
+		{
+			if (frequency > 2047)
+			{
+				m_lengthCounter.Disable();
+			}
+		}
+
+		void ComputeNextFrequencyAndCheckForOverflow()
+		{
+			Uint16 nextFrequency = ComputeNextFrequency();
+			PerformOverflowCheck(nextFrequency);
+		}
+
+		void Tick()
+		{
+			if (!m_enabled)
+			{
+				return;
+			}
+
+			if (m_sweepTimer > 0)
+			{
+				--m_sweepTimer;
+				if (m_sweepTimer == 0)
+				{
+					m_sweepTimer = GetSweepTimerPeriod();
+					Uint16 nextFrequency = ComputeNextFrequency();
+					if (nextFrequency <= 2047)
+					{
+						m_shadowFrequency = nextFrequency;
+						SetCurrentFrequency(m_shadowFrequency);
+					}
+					ComputeNextFrequencyAndCheckForOverflow();
+				}
+			}
+		}
+
+	private:
+		const Uint8& m_NRx0;
+		Uint8& m_NRx3;
+		Uint8& m_NRx4;
+		LengthCounter& m_lengthCounter;
+
+		Uint16 m_shadowFrequency;
+		Uint16 m_sweepTimer;
+		bool m_enabled;
+	};
+
+	class SquareWaveGenerator
+	{
+	public:
+		SquareWaveGenerator(const Uint8& NRx1, const Uint8& NRx3, const Uint8& NRx4)
+			: m_NRx1(NRx1)
+			, m_NRx3(NRx3)
+			, m_NRx4(NRx4)
+		{
+			Reset();
+		}
+
+		Uint16 GetDefaultFrequency() const
+		{
+			// MSB are in NRx4, LSB are in NRx3
+			return static_cast<Uint16>(((m_NRx4 & 0x7) << 8)) | m_NRx3;
+		}
+
+		//Uint16 GetFrequency()
+		//{
+		//	return m_frequency;
+		//}
+
+		//void SetFrequency(Uint16 frequency)
+		//{
+		//	m_frequency = frequency;
+		//}
+
+		Uint16 GetTimerPeriodFromFrequency(Uint16 frequency) const
+		{
+			return (2048 - frequency) * 4;
+		}
+
+		void ResetTimerPeriodFromFrequency()
+		{
+			m_frequencyTimerCounter = GetTimerPeriodFromFrequency(GetDefaultFrequency());
+		}
+
+		void Reset()
+		{
+			//m_frequency = GetDefaultFrequency();
+			ResetTimerPeriodFromFrequency();
+			m_samplePosition = 0;
+		}
+
+		void Tick()
+		{
+			SDL_assert(m_frequencyTimerCounter > 0);
+			--m_frequencyTimerCounter;
+			if (m_frequencyTimerCounter == 0)
+			{
+				ResetTimerPeriodFromFrequency();
+				
+				// The generator has eight steps
+				m_samplePosition = (m_samplePosition + 1) % 8;
+			}
+		}
+
+		Sint16 GetOutput() const
+		{
+			static Uint8 duties[4][8] =
+			{
+				{ 0, 0, 0, 0, 0, 0, 0, 1},
+				{ 1, 0, 0, 0, 0, 0, 0, 1},
+				{ 1, 0, 0, 0, 0, 1, 1, 1},
+				{ 0, 1, 1, 1, 1, 1, 1, 0}
+			};
+
+			int duty = (m_NRx1 & 0xC0) >> 6;
+
+			return duties[duty][m_samplePosition] ? 1 : -1;
+		}
+		
+	private:
+		const Uint8& m_NRx1;
+		const Uint8& m_NRx3;
+		const Uint8& m_NRx4;
+
+		//Uint16 m_frequency; // 0 to 2047
+		Uint16 m_frequencyTimerCounter;
+		Uint8 m_samplePosition;
+	};
+
 	static const int kWaveRamBase = 0xFF30;
 	static const int kWaveRamSize = 0xFF3F - kWaveRamBase + 1;
 
@@ -251,7 +406,8 @@ public:
 	}
 	
 	Sound()
-		: m_ch1Generator(NR11, NR13, NR14)
+		: m_ch1Sweep(NR10, NR13, NR14, m_ch1LengthCounter)
+		, m_ch1Generator(NR11, NR13, NR14)
 		, m_ch1LengthCounter(NR11, NR14)
 		, m_ch1VolumeEnvelope(NR12)
 		, m_ch2Generator(NR21, NR23, NR24)
@@ -380,6 +536,7 @@ public:
 
 	void OnSweepEnvelopeTick()
 	{
+		m_ch1Sweep.Tick();
 	}
 
 	void OnSequencerTick()
@@ -562,8 +719,19 @@ public:
 		{
 			switch (address)
 			{
-			SERVICE_MMR_RW(NR10)
-
+			case Registers::NR10:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR10 | 0x80;
+					}
+					else
+					{
+						NR10 = value;
+					}
+					return true;
+				}
+				break;
 			case Registers::NR11:
 				{
 					if (requestType == MemoryRequestType::Read)
@@ -618,12 +786,12 @@ public:
 						if (NR14 & Bit7)
 						{
 							// Channel is now enabled
+							m_ch1Sweep.Reset();
 							m_ch1Generator.Reset();
 							m_ch1LengthCounter.Enable();
 							m_ch1VolumeEnvelope.Reset();
 							//@TODO: Noise channel's LFSR bits are all set to 1.
 							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
-							//@TODO: Square 1's sweep does several things (see frequency sweep).
 						}
 					}
 					return true;
@@ -689,7 +857,6 @@ public:
 							m_ch2VolumeEnvelope.Reset();
 							//@TODO: Noise channel's LFSR bits are all set to 1.
 							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
-							//@TODO: Square 1's sweep does several things (see frequency sweep).
 						}
 					}
 					return true;
@@ -731,6 +898,7 @@ private:
 	Uint16 m_sequencerCounter;
 	float m_sampleTimeStep;
 
+	FrequencySweep m_ch1Sweep;
 	SquareWaveGenerator m_ch1Generator;
 	LengthCounter m_ch1LengthCounter;
 	VolumeEnvelope m_ch1VolumeEnvelope;
