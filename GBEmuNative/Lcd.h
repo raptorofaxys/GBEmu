@@ -278,7 +278,7 @@ public:
 		// Translate the color index to an actual color using the palette registers
 		Uint8 shadeShift = 2 * colorIndex;
 		Uint8 shadeMask = 0x3 << shadeShift;
-		Uint8 shade = (BGP & shadeMask) >> shadeShift;
+		Uint8 shade = (paletteRegister & shadeMask) >> shadeShift;
 
 		Uint8 luminosity = (3 - shade) * 0x55;
 		
