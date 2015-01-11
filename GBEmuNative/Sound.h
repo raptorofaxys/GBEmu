@@ -389,6 +389,80 @@ public:
 		Uint16 m_frequencyTimerCounter;
 		Uint8 m_samplePosition;
 	};
+	
+	class NoiseGenerator
+	{
+	public:
+		NoiseGenerator(const Uint8& NRx3)
+			: m_NRx3(NRx3)
+		{
+			Reset();
+		}
+
+		Uint8 GetClockShift() const
+		{
+			return (m_NRx3 & 0xF0) >> 4;
+		}
+
+		bool IsSevenBitMode() const
+		{
+			return (m_NRx3 & Bit3) != 0;
+		}
+
+		Uint8 GetDivisorCode() const
+		{
+			return m_NRx3 & 0x7;
+		}
+
+		Uint16 GetTimerPeriod() const
+		{
+			static Uint16 baseDivisors[] = {8, 16, 32, 48, 64, 80, 96, 112};
+			return baseDivisors[GetDivisorCode()] << GetClockShift();
+		}
+
+		void ResetTimerPeriodFromFrequency()
+		{
+			m_frequencyTimerCounter = GetTimerPeriod();
+		}
+
+		void Reset()
+		{
+			ResetTimerPeriodFromFrequency();
+			m_lfsr = 0xFFFF;
+		}
+
+		void Tick()
+		{
+			--m_frequencyTimerCounter;
+			if (m_frequencyTimerCounter == 0)
+			{
+				ResetTimerPeriodFromFrequency();
+				
+				// Documented implementation sounds further from the hardware than just a call to rand()
+				Uint16 xor01 = (m_lfsr & Bit0) ^ ((m_lfsr & Bit1) >> 1);
+				m_lfsr >>= 1;
+				m_lfsr |= xor01 << 15;
+				if (IsSevenBitMode())
+				{
+					m_lfsr |= xor01 << 6;
+				}
+
+				// Crush the above with a simple pseudorandom call - at high enough frequencies this sounds very similar to actual hardware... not true to the hardware, but it sounds better than the above
+				m_lfsr = rand() % 2;
+			}
+		}
+
+		Sint16 GetOutput() const
+		{
+			return 1 ^ (m_lfsr & Bit0);
+		}
+		
+	private:
+		const Uint8& m_NRx3;
+
+		Uint16 m_lfsr;
+		Uint16 m_frequencyTimerCounter;
+	};
 
 	static const int kWaveRamBase = 0xFF30;
 	static const int kWaveRamSize = 0xFF3F - kWaveRamBase + 1;
@@ -413,6 +487,9 @@ public:
 		, m_ch2Generator(NR21, NR23, NR24)
 		, m_ch2LengthCounter(NR21, NR24)
 		, m_ch2VolumeEnvelope(NR22)
+		, m_ch4Generator(NR43)
+		, m_ch4LengthCounter(NR41, NR44)
+		, m_ch4VolumeEnvelope(NR42)
 	{
 		if (SDL_GetNumAudioDevices(0) > 0)
 		{
@@ -507,6 +584,10 @@ public:
 		m_ch2LengthCounter.ResetLength();
 		m_ch2VolumeEnvelope.Reset();
 
+		m_ch4Generator.Reset();
+		m_ch4LengthCounter.ResetLength();
+		m_ch4VolumeEnvelope.Reset();
+
 		if (m_deviceId != 0)
 		{
 			SDL_UnlockAudioDevice(m_deviceId);
@@ -520,12 +601,14 @@ public:
 	{
 		m_ch1Generator.Tick();
 		m_ch2Generator.Tick();
+		m_ch4Generator.Tick();
 	}
 
 	void OnLengthTick()
 	{
 		m_ch1LengthCounter.Tick();
 		m_ch2LengthCounter.Tick();
+		m_ch4LengthCounter.Tick();
 	}
 
 	void OnVolumeEnvelopeTick()
@@ -599,9 +682,9 @@ public:
 						? &m_backBuffers[(m_nextBackBufferToTransfer + 1) % 2][m_numMonoSamplesAvailable - kDeviceBufferNumMonoSamples]
 						: &m_backBuffers[m_nextBackBufferToTransfer][m_numMonoSamplesAvailable];
 
-					auto ComputeSquareChannelOutput = [&](SquareWaveGenerator g, LengthCounter l, VolumeEnvelope v)
+					auto ComputeChannelOutput = [&](Uint16 generatorOutput, LengthCounter l, VolumeEnvelope v)
 						{ 
-							Sint16 value = g.GetOutput() * v.GetVolume();
+							Sint16 value = generatorOutput * v.GetVolume();
 							value *= 8191 / 0xF;
 
 							if (!l.IsChannelEnabled())
@@ -612,10 +695,11 @@ public:
 							return value;
 						};
 
-					Sint16 ch1Value = ComputeSquareChannelOutput(m_ch1Generator, m_ch1LengthCounter, m_ch1VolumeEnvelope);
-					Sint16 ch2Value = ComputeSquareChannelOutput(m_ch2Generator, m_ch2LengthCounter, m_ch2VolumeEnvelope);
+					Sint16 ch1Value = ComputeChannelOutput(m_ch1Generator.GetOutput(), m_ch1LengthCounter, m_ch1VolumeEnvelope);
+					Sint16 ch2Value = ComputeChannelOutput(m_ch2Generator.GetOutput(), m_ch2LengthCounter, m_ch2VolumeEnvelope);
+					Sint16 ch4Value = ComputeChannelOutput(m_ch4Generator.GetOutput(), m_ch4LengthCounter, m_ch4VolumeEnvelope);
 
-					Sint16 finalValue = ch1Value + ch2Value;
+					Sint16 finalValue = ch1Value + ch2Value + ch4Value;
 
 					//@TODO: mixing, etc.
 
@@ -790,7 +874,6 @@ public:
 							m_ch1Generator.Reset();
 							m_ch1LengthCounter.Enable();
 							m_ch1VolumeEnvelope.Reset();
-							//@TODO: Noise channel's LFSR bits are all set to 1.
 							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 						}
 					}
@@ -855,7 +938,6 @@ public:
 							m_ch2Generator.Reset();
 							m_ch2LengthCounter.Enable();
 							m_ch2VolumeEnvelope.Reset();
-							//@TODO: Noise channel's LFSR bits are all set to 1.
 							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
 						}
 					}
@@ -869,11 +951,69 @@ public:
 			SERVICE_MMR_RW(NR33)
 			SERVICE_MMR_RW(NR34)
 
-			SERVICE_MMR_RW(NR41)
-			SERVICE_MMR_RW(NR42)
-			SERVICE_MMR_RW(NR43)
-			SERVICE_MMR_RW(NR44)
+			case Registers::NR41:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR41 | 0xFF;
+					}
+					else
+					{
+						NR41 = value;
 
+						m_ch4LengthCounter.ResetLength();
+					}
+					return true;
+				}
+				break;
+			case Registers::NR42:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR42 | 0x00;
+					}
+					else
+					{
+						NR42 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR43:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR43 | 0x00;
+					}
+					else
+					{
+						NR43 = value;
+					}
+					return true;
+				}
+				break;
+			case Registers::NR44:
+				{
+					if (requestType == MemoryRequestType::Read)
+					{
+						value = NR44 | 0xBF;
+					}
+					else
+					{
+						NR44 = value;
+
+						if (NR44 & Bit7)
+						{
+							// Channel is now enabled
+							m_ch4Generator.Reset();
+							m_ch4LengthCounter.Enable();
+							m_ch4VolumeEnvelope.Reset();
+							//@TODO: Wave channel's position is set to 0 but sample buffer is NOT refilled.
+						}
+					}
+					return true;
+				}
+				break;
 			SERVICE_MMR_RW(NR50)
 			SERVICE_MMR_RW(NR51)
 			SERVICE_MMR_RW(NR52)
@@ -906,6 +1046,10 @@ private:
 	SquareWaveGenerator m_ch2Generator;
 	LengthCounter m_ch2LengthCounter;
 	VolumeEnvelope m_ch2VolumeEnvelope;
+	
+	NoiseGenerator m_ch4Generator;
+	LengthCounter m_ch4LengthCounter;
+	VolumeEnvelope m_ch4VolumeEnvelope;
 	
 	Uint8 NR10;
 	Uint8 NR11;
