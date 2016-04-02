@@ -1598,7 +1598,19 @@ private:
 	void TraceLog(const std::string& message)
 	{
 		m_traceLog += message;
-		printf("%s", message.c_str());
+		
+		static int const DUMP_BUFFER_SIZE = 1000000;
+		if (m_traceLog.length() > DUMP_BUFFER_SIZE)
+		{
+			FILE* pFile;
+			fopen_s(&pFile, "tracelog.txt", "a");
+			if (pFile)
+			{
+				fwrite(m_traceLog.data(), m_traceLog.length(), 1, pFile);
+				fclose(pFile);
+			}
+			m_traceLog.clear();
+		}
 	}
 
 	struct OpcodeMetadata

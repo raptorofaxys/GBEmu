@@ -97,6 +97,7 @@ public:
 					break;
 				default:
 					throw Exception("Unsupported MBC1 RAM/ROM banking mode: %d", value);
+					break;
 				}
 				return true;
 			}

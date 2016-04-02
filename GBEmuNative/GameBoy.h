@@ -86,6 +86,7 @@ public:
 		m_totalCyclesExecuted = 0.0f;
 		m_cyclesRemaining = 0.0f;
 		m_debuggerState = DebuggerState::Running;
+		//m_debuggerState = DebuggerState::SingleStepping;
 		m_breakpointAddress = -1;
 
 		m_pMemoryBus->Reset();
@@ -96,10 +97,6 @@ public:
 		m_pLcd->Reset();
 		m_pSound->Reset();
 		m_pMapper->Reset();
-
-		//@TODO: initial state
-		//Write8(MemoryBus::MemoryMappedRegisters::TIMA, 0);
-		//m_pMemory->TIMA = 0;
 	}
 
 	void ToggleStepping()

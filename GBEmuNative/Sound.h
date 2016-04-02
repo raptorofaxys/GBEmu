@@ -341,16 +341,6 @@ public:
 			return static_cast<Uint16>(((m_NRx4 & 0x7) << 8)) | m_NRx3;
 		}
 
-		//Uint16 GetFrequency()
-		//{
-		//	return m_frequency;
-		//}
-
-		//void SetFrequency(Uint16 frequency)
-		//{
-		//	m_frequency = frequency;
-		//}
-
 		Uint16 GetTimerPeriodFromFrequency(Uint16 frequency) const
 		{
 			return (2048 - frequency) * 4;
@@ -363,7 +353,6 @@ public:
 
 		void Reset()
 		{
-			//m_frequency = GetDefaultFrequency();
 			ResetTimerPeriodFromFrequency();
 			m_samplePosition = 0;
 		}
@@ -401,7 +390,6 @@ public:
 		const Uint8& m_NRx3;
 		const Uint8& m_NRx4;
 
-		//Uint16 m_frequency; // 0 to 2047
 		Uint16 m_frequencyTimerCounter;
 		Uint8 m_samplePosition;
 	};
@@ -445,7 +433,6 @@ public:
 		{
 			ResetTimerPeriodFromFrequency();
 			m_lfsr = 0xFFFF;
-			//m_lfsr = rand();
 		}
 
 		void Tick()
@@ -796,7 +783,10 @@ public:
 					// Sine wave test
 					//static float f = 0.0f;
 					//f += m_sampleTimeStep;
-					//ch2Value = sinf(f * 220.0f * 2 * 3.14f) * 4000.0f;
+					//ch1Value = sinf(f * 220.0f * 2 * 3.14f) * 4000.0f;
+					//ch2Value = 0;
+					//ch3Value = 0;
+					//ch4Value = 0;
 
 					static int const preMixShift = 2;
 					ch1Value >>= preMixShift;
@@ -891,13 +881,6 @@ public:
 			memset(pBuffer, 0, kDeviceBufferByteSize);
 		}
 
-		//	static int logSkip = 0;
-		//	++logSkip;
-		//	if (logSkip % 32 == 0)
-		//	{
-		//		m_traceLog += Format("%4X %4X %4X %4X\n", 0, ch2Value & 0xFFFF, 0, 0);
-		//	}
-
 		//	static float lpf = 0.0f;
 		//	static float lpAlpha = 0.9f;
 		//	lpf = ((1.0f - lpAlpha) * ch2Value) + (lpAlpha * lpf);
@@ -917,6 +900,7 @@ public:
 		}
 		else
 		{
+			// This switch/case is horrendous, but there is a lot of custom/corner-edgy code scattered here and there to handle the differences between the channels.
 			switch (address)
 			{
 			case Registers::NR10:
