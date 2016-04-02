@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <Windows.h>
+#include <direct.h>
 
 float g_totalCyclesExecuted = 0.0f;
 
@@ -16,6 +17,20 @@ int main(int argc, char **argv)
 {
 	try
 	{
+		if (argc < 2)
+		{
+			throw Exception("Missing working directory argument");
+		}
+
+		{
+			auto workingDir = argv[1];
+			auto result = _chdir(workingDir);
+			if (result < 0)
+			{
+				throw Exception("Unable to switch to working directory");
+			}
+		}
+
 		//@TODO: change targetname per configuration
 		ProcessConsole console;
 
@@ -60,10 +75,10 @@ int main(int argc, char **argv)
 		//GameBoy gb("Alleyway (JUE) [!].gb", pRenderer.get()); // messed up attract mode
 		//GameBoy gb("Balloon Kid (JUE) [!].gb", pRenderer.get());
 		//GameBoy gb("F-1 Race (JUE) (V1.1) [!].gb", pRenderer.get()); // MBC2 + battery
-		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb", pRenderer.get());
+		GameBoy gb("Metroid II - Return of Samus (UE) [!].gb", pRenderer.get());
 		//GameBoy gb("Radar Mission (UE) [!].gb", pRenderer.get());
 		//GameBoy gb("SolarStriker (JU) [!].gb", pRenderer.get()); // keeps LCD disabled
-		GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
+		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Turok - Battle of the Bionosaurs (UE) (M4) [!].gb", pRenderer.get());
 

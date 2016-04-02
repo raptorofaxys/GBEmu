@@ -9,7 +9,7 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>sdl2.lib;sdl2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>external\SDL2-2.0.3\VisualC\SDLMain\Win32\Release;external\SDL2-2.0.3\VisualC\SDL\Win32\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>external\SDL2-2.0.3\VisualC\SDLMain\Win32\$(Configuration);external\SDL2-2.0.3\VisualC\SDL\Win32\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup />
