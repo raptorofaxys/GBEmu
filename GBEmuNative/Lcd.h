@@ -40,12 +40,21 @@ public:
 	static const int kOamBase = 0xFE00;
 	static const int kOamSize = 0xFE9F - kOamBase + 1;
 
-	Lcd(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu, const std::shared_ptr<SDL_Texture>& pFrameBuffer)
+	Lcd(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu, SDL_Renderer* pRenderer)
 		: m_pMemory(memory)
 		, m_pMemoryUnsafe(memory.get())
 		, m_pCpu(cpu)
-		, m_pFrameBuffer(pFrameBuffer)
 	{
+		if (!pRenderer)
+		{
+			throw Exception("Couldn't create framebuffer texture");
+		}
+		auto createBufferFunc = [pRenderer]()
+		{
+			return std::shared_ptr<SDL_Texture>(SDL_CreateTexture(pRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Lcd::kScreenWidth, Lcd::kScreenHeight), SDL_DestroyTexture);
+		};
+		m_pFrameBuffer = createBufferFunc();
+
 		//@TODO SDL_QueryTexture
 		//SDL_assert()
 		Reset();
@@ -76,6 +85,11 @@ public:
 		OBP1 = 0xFF;
 		WY = 0;
 		WX = 0;
+	}
+
+	SDL_Texture* GetFrontFrameBufferTexture() const
+	{
+		return m_pFrameBuffer.get();
 	}
 
 	void Update(float seconds)
@@ -587,4 +601,5 @@ private:
 	MemoryBus* m_pMemoryUnsafe;
 	std::shared_ptr<Cpu> m_pCpu;
 	std::shared_ptr<SDL_Texture> m_pFrameBuffer;
+	//std::shared_ptr<SDL_Texture> m_pBackBuffer;
 };

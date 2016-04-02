@@ -25,12 +25,6 @@ public:
 
 	GameBoy(const char* pFileName, SDL_Renderer* pRenderer)
 	{
-		m_pFrameBuffer.reset(SDL_CreateTexture(pRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Lcd::kScreenWidth, Lcd::kScreenHeight), SDL_DestroyTexture);
-		if (!pRenderer)
-		{
-			throw Exception("Couldn't create framebuffer texture");
-		}
-
 		m_pRom.reset(new Rom(pFileName));
 
 		auto cartridgeType = m_pRom->GetCartridgeType();
@@ -53,7 +47,7 @@ public:
 		m_pTimer.reset(new Timer(m_pMemoryBus, m_pCpu));
 		m_pJoypad.reset(new Joypad(m_pMemoryBus, m_pCpu));
 		m_pGameLinkPort.reset(new GameLinkPort());
-		m_pLcd.reset(new Lcd(m_pMemoryBus, m_pCpu, m_pFrameBuffer));
+		m_pLcd.reset(new Lcd(m_pMemoryBus, m_pCpu, pRenderer));
 		m_pSound.reset(new Sound());
 		m_pUnknownMemoryMappedRegisters.reset(new UnknownMemoryMappedRegisters());
 
@@ -76,9 +70,9 @@ public:
 		return *m_pRom;
 	}
 
-	SDL_Texture* GetFrameBufferTexture() const
+	SDL_Texture* GetFrontFrameBufferTexture() const
 	{
-		return m_pFrameBuffer.get();
+		return m_pLcd->GetFrontFrameBufferTexture();
 	}
 
 	void Reset()
@@ -202,6 +196,4 @@ private:
 	float m_cyclesRemaining;
 	DebuggerState m_debuggerState;
 	Sint32 m_breakpointAddress;
-
-	std::shared_ptr<SDL_Texture> m_pFrameBuffer;
 };

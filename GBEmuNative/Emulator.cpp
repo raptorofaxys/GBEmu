@@ -147,7 +147,7 @@ int main(int argc, char **argv)
 			lastTicks = ticks;
 
 		    SDL_RenderClear(pRenderer.get());
-		    SDL_RenderCopy(pRenderer.get(), gb.GetFrameBufferTexture(), NULL, NULL);
+		    SDL_RenderCopy(pRenderer.get(), gb.GetFrontFrameBufferTexture(), NULL, NULL);
 		    SDL_RenderPresent(pRenderer.get());
 		}
 	}
