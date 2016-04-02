@@ -17,9 +17,9 @@ int main(int argc, char **argv)
 {
 	try
 	{
-		if (argc < 2)
+		if (argc < 3)
 		{
-			throw Exception("Missing working directory argument");
+			throw Exception("Wrong syntax: %s <working directory> <rom>", argv[0]);
 		}
 
 		{
@@ -75,12 +75,13 @@ int main(int argc, char **argv)
 		//GameBoy gb("Alleyway (JUE) [!].gb", pRenderer.get()); // messed up attract mode
 		//GameBoy gb("Balloon Kid (JUE) [!].gb", pRenderer.get());
 		//GameBoy gb("F-1 Race (JUE) (V1.1) [!].gb", pRenderer.get()); // MBC2 + battery
-		GameBoy gb("Metroid II - Return of Samus (UE) [!].gb", pRenderer.get());
+		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb", pRenderer.get());
 		//GameBoy gb("Radar Mission (UE) [!].gb", pRenderer.get());
 		//GameBoy gb("SolarStriker (JU) [!].gb", pRenderer.get()); // keeps LCD disabled
 		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
 		//GameBoy gb("Turok - Battle of the Bionosaurs (UE) (M4) [!].gb", pRenderer.get());
+		GameBoy gb(argv[2], pRenderer.get());
 
 		const auto& gameName = gb.GetRom().GetRomName();
 		SDL_SetWindowTitle(pWindow.get(), gameName.c_str());
