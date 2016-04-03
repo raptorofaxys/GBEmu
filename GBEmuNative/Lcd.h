@@ -500,9 +500,7 @@ public:
 
 	void SwapFrameBuffers()
 	{
-		auto t = m_pFrontBuffer;
-		m_pFrontBuffer = m_pBackBuffer;
-		m_pBackBuffer = t;
+		std::swap(m_pFrontBuffer, m_pBackBuffer);
 	}
 
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
