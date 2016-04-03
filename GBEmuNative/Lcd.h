@@ -53,7 +53,8 @@ public:
 		{
 			return std::shared_ptr<SDL_Texture>(SDL_CreateTexture(pRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Lcd::kScreenWidth, Lcd::kScreenHeight), SDL_DestroyTexture);
 		};
-		m_pFrameBuffer = createBufferFunc();
+		m_pBackBuffer = createBufferFunc();
+		m_pFrontBuffer = createBufferFunc();
 
 		//@TODO SDL_QueryTexture
 		//SDL_assert()
@@ -89,7 +90,7 @@ public:
 
 	SDL_Texture* GetFrontFrameBufferTexture() const
 	{
-		return m_pFrameBuffer.get();
+		return m_pFrontBuffer.get();
 	}
 
 	void Update(float seconds)
@@ -178,6 +179,7 @@ public:
 						}
 						// Always fire the blank into IF
 						m_pCpu->SignalInterrupt(Bit0);
+						SwapFrameBuffers();
 						break;
 					case 2:
 						// Reading OAM interrupt
@@ -217,7 +219,7 @@ public:
 	{
 		void* pVoidPixels;
 		int pitch;
-		SDL_LockTexture(m_pFrameBuffer.get(), NULL, &pVoidPixels, &pitch);
+		SDL_LockTexture(m_pBackBuffer.get(), NULL, &pVoidPixels, &pitch);
 
 		char* pPixels = reinterpret_cast<char*>(pVoidPixels);
 
@@ -235,7 +237,8 @@ public:
 			}
 		}
 		
-		SDL_UnlockTexture(m_pFrameBuffer.get());
+		SDL_UnlockTexture(m_pBackBuffer.get());
+		SwapFrameBuffers();
 	}
 
 	Uint8 ReadVram(Uint16 address)
@@ -305,7 +308,7 @@ public:
 		{
 			void* pPixels;
 			int pitch;
-			SDL_LockTexture(m_pFrameBuffer.get(), NULL, &pPixels, &pitch);
+			SDL_LockTexture(m_pBackBuffer.get(), NULL, &pPixels, &pitch);
 
 			Uint32* pARGB = reinterpret_cast<Uint32*>(static_cast<Uint8*>(pPixels) + LY * pitch);
 
@@ -491,8 +494,15 @@ public:
 				++c;
 			}
 
-			SDL_UnlockTexture(m_pFrameBuffer.get());
+			SDL_UnlockTexture(m_pBackBuffer.get());
 		}
+	}
+
+	void SwapFrameBuffers()
+	{
+		auto t = m_pFrontBuffer;
+		m_pFrontBuffer = m_pBackBuffer;
+		m_pBackBuffer = t;
 	}
 
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
@@ -600,6 +610,6 @@ private:
 	std::shared_ptr<MemoryBus> m_pMemory;
 	MemoryBus* m_pMemoryUnsafe;
 	std::shared_ptr<Cpu> m_pCpu;
-	std::shared_ptr<SDL_Texture> m_pFrameBuffer;
-	//std::shared_ptr<SDL_Texture> m_pBackBuffer;
+	std::shared_ptr<SDL_Texture> m_pBackBuffer;
+	std::shared_ptr<SDL_Texture> m_pFrontBuffer;
 };

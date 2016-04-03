@@ -61,6 +61,17 @@ inline std::string Format(const char* pFormatter, ...)
 	return std::string(szBuffer);
 }
 
+inline void DebugPrint(const char* pFormatter, ...)
+{
+	va_list args;
+	va_start(args, pFormatter);
+	char szBuffer[4096];
+	vsnprintf_s(szBuffer, ARRAY_SIZE(szBuffer), pFormatter, args);
+	va_end(args);
+
+	OutputDebugStringA(szBuffer);
+}
+
 class Exception
 {
 public:
