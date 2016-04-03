@@ -512,13 +512,15 @@ private:
 		A = RR(A, false);
 	}
 
-	template <int N> void JR_2_3__0__2_3__8()
+	template <int N> int JR_2_3__0__2_3__8()
 	{
 		Sint8 displacement = static_cast<Sint8>(Fetch8()); // the offset can be negative here
 		if (b3_4_NZ_Z_NC_C_Eval<N>())
 		{
 			PC += displacement;
+			return 12;
 		}
+		return 8;
 	}
 
 	template <int N> void LDI_2__2()
@@ -664,12 +666,14 @@ private:
 		CP(b0_2_B_C_D_E_H_L_iHL_A_Read8<N>());
 	}
 
-	template <int N> void RET_C_D__0__C_D__8()
+	template <int N> int RET_C_D__0__C_D__8()
 	{
 		if (b3_4_NZ_Z_NC_C_Eval<N>())
 		{
 			Ret();
+			return 20;
 		}
+		return 8;
 	}
 
 	template <int N> void POP_C_F__1()
@@ -677,13 +681,15 @@ private:
 		b4_5_BC_DE_HL_AF_Write16<N>(Pop16());
 	}
 
-	template <int N> void JP_C_D__2__C_D__2()
+	template <int N> int JP_C_D__2__C_D__2()
 	{
 		auto address = Fetch16();
 		if (b3_4_NZ_Z_NC_C_Eval<N>())
 		{
 			PC = address;
+			return 16;
 		}
+		return 12;
 	}
 
 	template <int N> void JP_C__3()
@@ -691,13 +697,15 @@ private:
 		PC = Fetch16();
 	}
 
-	template <int N> void CALL_C_D__4__C_D__C()
+	template <int N> int CALL_C_D__4__C_D__C()
 	{
 		auto address = Fetch16();
 		if (b3_4_NZ_Z_NC_C_Eval<N>())
 		{
 			Call(address);
+			return 24;
 		}
+		return 12;
 	}
 
 	template <int N> void PUSH_C_F__5()
@@ -966,6 +974,8 @@ private:
 		Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
 
 #define OPCODE(code, cycles, name) case code: instructionCycles = (cycles); name<code>(); break;
+#define OPCODE_WITH_DYNAMIC_COST(code, name) case code: instructionCycles = name<code>(); break;
+
 		switch (opcode)
 		{
 		OPCODE(0x00, 4, NOP_0__0)
@@ -1037,10 +1047,10 @@ private:
 
 		OPCODE(0x1F, 4, RR_1__F)
 
-		OPCODE(0x20, 8, JR_2_3__0__2_3__8)
-		OPCODE(0x28, 8, JR_2_3__0__2_3__8)
-		OPCODE(0x30, 8, JR_2_3__0__2_3__8)
-		OPCODE(0x38, 8, JR_2_3__0__2_3__8)
+		OPCODE_WITH_DYNAMIC_COST(0x20, JR_2_3__0__2_3__8)
+		OPCODE_WITH_DYNAMIC_COST(0x28, JR_2_3__0__2_3__8)
+		OPCODE_WITH_DYNAMIC_COST(0x30, JR_2_3__0__2_3__8)
+		OPCODE_WITH_DYNAMIC_COST(0x38, JR_2_3__0__2_3__8)
 
 		OPCODE(0x22, 8, LDI_2__2)
 		OPCODE(0x32, 8, LDD_3__2)
@@ -1193,27 +1203,27 @@ private:
 		OPCODE(0xBE, 8, CP_B__8_F)
 		OPCODE(0xBF, 4, CP_B__8_F)
 
-		OPCODE(0xC0, 8, RET_C_D__0__C_D__8)
-		OPCODE(0xC8, 8, RET_C_D__0__C_D__8)
-		OPCODE(0xD0, 8, RET_C_D__0__C_D__8)
-		OPCODE(0xD8, 8, RET_C_D__0__C_D__8)
+		OPCODE_WITH_DYNAMIC_COST(0xC0, RET_C_D__0__C_D__8)
+		OPCODE_WITH_DYNAMIC_COST(0xC8, RET_C_D__0__C_D__8)
+		OPCODE_WITH_DYNAMIC_COST(0xD0, RET_C_D__0__C_D__8)
+		OPCODE_WITH_DYNAMIC_COST(0xD8, RET_C_D__0__C_D__8)
 
 		OPCODE(0xC1, 12, POP_C_F__1)
 		OPCODE(0xD1, 12, POP_C_F__1)
 		OPCODE(0xE1, 12, POP_C_F__1)
 		OPCODE(0xF1, 12, POP_C_F__1)
 
-		OPCODE(0xC2, 12, JP_C_D__2__C_D__2)
-		OPCODE(0xCA, 12, JP_C_D__2__C_D__2)
-		OPCODE(0xD2, 12, JP_C_D__2__C_D__2)
-		OPCODE(0xDA, 12, JP_C_D__2__C_D__2)
+		OPCODE_WITH_DYNAMIC_COST(0xC2, JP_C_D__2__C_D__2)
+		OPCODE_WITH_DYNAMIC_COST(0xCA, JP_C_D__2__C_D__2)
+		OPCODE_WITH_DYNAMIC_COST(0xD2, JP_C_D__2__C_D__2)
+		OPCODE_WITH_DYNAMIC_COST(0xDA, JP_C_D__2__C_D__2)
 			
 		OPCODE(0xC3, 12, JP_C__3)
 
-		OPCODE(0xC4, 12, CALL_C_D__4__C_D__C)
-		OPCODE(0xD4, 12, CALL_C_D__4__C_D__C)
-		OPCODE(0xCC, 12, CALL_C_D__4__C_D__C)
-		OPCODE(0xDC, 12, CALL_C_D__4__C_D__C)
+		OPCODE_WITH_DYNAMIC_COST(0xC4, CALL_C_D__4__C_D__C)
+		OPCODE_WITH_DYNAMIC_COST(0xD4, CALL_C_D__4__C_D__C)
+		OPCODE_WITH_DYNAMIC_COST(0xCC, CALL_C_D__4__C_D__C)
+		OPCODE_WITH_DYNAMIC_COST(0xDC, CALL_C_D__4__C_D__C)
 
 		OPCODE(0xC5, 16, PUSH_C_F__5)
 		OPCODE(0xD5, 16, PUSH_C_F__5)
@@ -1571,6 +1581,7 @@ private:
 		OPCODE(0xFD, 4, IllegalOpcode)
 
 #undef OPCODE
+#undef OPCODE_WITH_DYNAMIC_COST
 		default:
 			unknownOpcode = true;
 			break;
