@@ -50,6 +50,25 @@ inline bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
 std::shared_ptr<std::vector<Uint8>> LoadFileAsByteArray(const char* pFileName);
 
+inline std::string Replace(const std::string& str, const std::string& substring, const std::string& replacement)
+{
+	// Quite inefficient in terms of allocations
+	auto result = str;
+	auto substringLength = substring.length();
+	for (;;)
+	{
+		auto pos = result.find(substring);
+		if (pos == std::string::npos)
+		{
+			break;
+		}
+
+		result.replace(pos, substringLength, replacement);
+	}
+	
+	return result;
+}
+
 inline std::string Format(const char* pFormatter, ...)
 {
 	va_list args;

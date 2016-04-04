@@ -3,6 +3,8 @@
 #include "MemoryBus.h"
 
 #include <memory>
+#include <algorithm>
+#include <array>
 
 #include "SDL.h"
 
@@ -160,6 +162,41 @@ public:
 	void SetTraceEnabled(bool enabled)
 	{
 		m_traceEnabled = enabled;
+	}
+
+#define TRACELOG_FILENAME "tracelog.txt"
+
+	void FlushTraceLog()
+	{
+		FILE* pFile;
+		fopen_s(&pFile, TRACELOG_FILENAME, "a");
+		if (pFile)
+		{
+			fwrite(m_traceLog.data(), m_traceLog.length(), 1, pFile);
+			fclose(pFile);
+		}
+		m_traceLog.clear();
+	}
+
+	void ResetTraceLog()
+	{
+		FILE* pFile;
+		fopen_s(&pFile, TRACELOG_FILENAME, "wb");
+		if (pFile)
+		{
+			fclose(pFile);
+		}
+	}
+
+	void TraceLog(const std::string& message)
+	{
+		m_traceLog += message;
+
+		static int const DUMP_BUFFER_SIZE = 10000;
+		if (m_traceLog.length() > DUMP_BUFFER_SIZE)
+		{
+			FlushTraceLog();
+		}
 	}
 
 private:
@@ -1606,24 +1643,6 @@ private:
 	// Debugging/tracing
 	///////////////////////////////////////////////////////////////////////////
 
-	void TraceLog(const std::string& message)
-	{
-		m_traceLog += message;
-		
-		static int const DUMP_BUFFER_SIZE = 1000000;
-		if (m_traceLog.length() > DUMP_BUFFER_SIZE)
-		{
-			FILE* pFile;
-			fopen_s(&pFile, "tracelog.txt", "a");
-			if (pFile)
-			{
-				fwrite(m_traceLog.data(), m_traceLog.length(), 1, pFile);
-				fclose(pFile);
-			}
-			m_traceLog.clear();
-		}
-	}
-
 	struct OpcodeMetadata
 	{
 		OpcodeMetadata()
@@ -1639,6 +1658,7 @@ private:
 		Uint8 size;
 		bool illegal;
 	};
+	using OpcodeMetadataArray = std::array<OpcodeMetadata, 0x100>;
 
 	// The following functions were preprocessed using a spreadsheet from http://imrannazar.com/Gameboy-Z80-Opcode-Map and http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
 	const char* GetOpcodeMnemonic(Uint8 opcode)
@@ -1659,8 +1679,8 @@ private:
 			"OR B", "OR C", "OR D", "OR E", "OR H", "OR L", "OR (HL)", "OR A", "CP B [F;A,B]", "CP C", "CP D", "CP E", "CP H", "CP L", "CP (HL)", "CP A",
 			"RET NZ", "POP BC", "JP NZ,nn", "JP nn", "CALL NZ,nn", "PUSH BC", "ADD A,n", "RST 0", "RET Z", "RET", "JP Z,nn", "Ext ops", "CALL Z,nn", "CALL nn", "ADC A,n", "RST 8",
 			"RET NC", "POP DE", "JP NC,nn", "XX", "CALL NC,nn", "PUSH DE", "SUB A,n", "RST 10", "RET C", "RETI", "JP C,nn", "XX", "CALL C,nn", "XX", "SBC A,n", "RST 18",
-			"LDH (n),A", "POP HL", "LDH (C),A", "XX", "XX", "PUSH HL", "AND n", "RST 20", "ADD SP,d", "JP (HL)", "LD (nn),A", "XX", "XX", "XX", "XOR n", "RST 28",
-			"LDH A,(n)", "POP AF", "XX", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,d", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
+			"LDH (n),A", "POP HL", "LDH (C),A", "XX", "XX", "PUSH HL", "AND n", "RST 20", "ADD SP,n", "JP (HL)", "LD (nn),A", "XX", "XX", "XX", "XOR n", "RST 28",
+			"LDH A,(n)", "POP AF", "LDH A,(C)", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,n", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
 		};
 
 		return opcodeMnemonics[opcode];
@@ -1691,28 +1711,86 @@ private:
 		return extOpsMnemonics[opcode];
 	}
 
-	int GetOpcodeSize(Uint8 opcode)
+	//int GetOpcodeSize(Uint8 opcode)
+	//{
+	//	// Parsed from http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html - some are wrong it seems
+	//	//static const Uint8 opcodeSizes[256] =
+	//	//{
+	//	//	1,	3,	1,	1,	1,	1,	2,	1,	3,	1,	1,	1,	1,	1,	2,	1,
+	//	//	2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+	//	//	2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+	//	//	2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//	//	1,	1,	3,	3,	3,	1,	2,	1,	1,	1,	3,	1,	3,	3,	2,	1,
+	//	//	1,	1,	3,	0,	3,	1,	2,	1,	1,	1,	3,	0,	3,	0,	2,	1,
+	//	//	2,	1,	2,	0,	0,	1,	2,	1,	2,	1,	3,	0,	0,	0,	2,	1,
+	//	//	2,	1,	2,	1,	0,	1,	2,	1,	2,	1,	3,	1,	0,	0,	2,	1,
+	//	//};
+	//	static const Uint8 opcodeSizes[256] =
+	//	{
+	//		1,	3,	1,	1,	1,	1,	2,	1,	3,	1,	1,	1,	1,	1,	2,	1,
+	//		1,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+	//		2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+	//		2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	//		1,	1,	3,	3,	3,	1,	2,	1,	1,	1,	3,	1,	3,	3,	2,	1,
+	//		1,	1,	3,	1,	3,	1,	2,	1,	1,	1,	3,	1,	3,	1,	2,	1,
+	//		2,	1,	1,	1,	1,	1,	2,	1,	2,	1,	3,	1,	1,	1,	2,	1,
+	//		2,	1,	1,	1,	1,	1,	2,	1,	2,	1,	3,	1,	1,	1,	2,	1,
+	//	};
+	//	return opcodeSizes[opcode];
+	//}
+
+	static int GetComputedOpcodeSizeInternal(Uint8 opcode, const OpcodeMetadataArray& metadata)
 	{
-		static const Uint8 opcodeSizes[256] =
+		auto size = 1;
+		auto parseOperand = [&size](const std::string& operand)
 		{
-			1,	3,	1,	1,	1,	1,	2,	1,	3,	1,	1,	1,	1,	1,	2,	1,
-			2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
-			2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
-			2,	3,	1,	1,	1,	1,	2,	1,	2,	1,	1,	1,	1,	1,	2,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,	1,
-			1,	1,	3,	3,	3,	1,	2,	1,	1,	1,	3,	1,	3,	3,	2,	1,
-			1,	1,	3,	0,	3,	1,	2,	1,	1,	1,	3,	0,	3,	0,	2,	1,
-			2,	1,	2,	0,	0,	1,	2,	1,	2,	1,	3,	0,	0,	0,	2,	1,
-			2,	1,	2,	1,	0,	1,	2,	1,	2,	1,	3,	1,	0,	0,	2,	1,
+			if ((operand == "nn") || (operand == "(nn)"))
+			{
+				size += 2;
+			}
+			else if ((operand == "n") || (operand == "(n)"))
+			{
+				size += 1;
+			}
 		};
-		return opcodeSizes[opcode];
+		//std::for_each(begin(m_opcodeMetadata[opcode].inputs), end(m_opcodeMetadata[opcode].inputs), parseOperand);
+		//std::for_each(m_opcodeMetadata[opcode].outputs, parseOperand);
+
+		for (const auto& input : metadata[opcode].inputs)
+		{
+			parseOperand(input);
+		}
+		for (const auto& output : metadata[opcode].outputs)
+		{
+			parseOperand(output);
+		}
+		return size;
+	}
+	
+	int GetComputedOpcodeSize(Uint8 opcode)
+	{
+		return GetComputedOpcodeSizeInternal(opcode, m_opcodeMetadata);
+	}
+
+	int GetComputedExtendedOpcodeSize(Uint8 opcode)
+	{
+		return GetComputedOpcodeSizeInternal(opcode, m_extendedOpcodeMetadata) + 1;
 	}
 
 	int GetExtendedOpcodeSize(Uint8 opcode)
@@ -1767,13 +1845,13 @@ private:
 					break;
 				}
 
-				// New input
+				// New output
 				meta.outputs.push_back(std::string());
 				pToken = &meta.outputs.back();
 			}
 			else if (c == ',')
 			{
-				// New output
+				// New input
 				meta.inputs.push_back(std::string());
 				pToken = &meta.inputs.back();
 			}
@@ -1785,11 +1863,11 @@ private:
 			++mnemonic;
 		}
 
-		if ((meta.outputs.size() > 0) && (meta.inputs.size() == 0))
-		{
-			// If only one output and no input, for the moment, assume the input is the same as the output
-			meta.inputs.push_back(meta.outputs.back());
-		}
+		//if ((meta.outputs.size() > 0) && (meta.inputs.size() == 0))
+		//{
+		//	// If only one output and no input, for the moment, assume the input is the same as the output
+		//	meta.inputs.push_back(meta.outputs.back());
+		//}
 
 		// Process special cases
 		if (meta.baseMnemonic == "XX")
@@ -1811,7 +1889,11 @@ private:
 
 			auto& meta = m_opcodeMetadata[opcode];
 			ParseMnemonic(GetOpcodeMnemonic(opcode), meta);
-			meta.size = GetOpcodeSize(opcode);
+			meta.size = GetComputedOpcodeSize(opcode);
+			//if (meta.size != GetComputedOpcodeSize(opcode))
+			//{
+			//	SDL_assert(false && "Miscomputed opcode size");
+			//}
 		}
 		
 		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
@@ -1820,7 +1902,11 @@ private:
 			
 			auto& meta = m_extendedOpcodeMetadata[opcode];
 			ParseMnemonic(GetExtendedOpcodeMnemonic(opcode), meta);
-			meta.size = GetExtendedOpcodeSize(opcode);
+			meta.size = GetComputedExtendedOpcodeSize(opcode);
+			//if (meta.size != GetComputedExtendedOpcodeSize(opcode))
+			//{
+			//	SDL_assert(false && "Miscomputed opcode size");
+			//}
 		}
 	}
 
@@ -1830,20 +1916,64 @@ private:
 		{
 			//SetForegroundConsoleColor();
 
-			const char* pMnemonic = IsExtendedOpcode(opcode) ? GetExtendedOpcodeMnemonic(opcode) :GetOpcodeMnemonic(opcode);
+			auto extendedOpcode = Peek8(PC + 1);
+			std::string mnemonic = IsExtendedOpcode(opcode) ? GetExtendedOpcodeMnemonic(extendedOpcode) : GetOpcodeMnemonic(opcode);
+			const auto& meta = IsExtendedOpcode(opcode) ? m_extendedOpcodeMetadata[extendedOpcode] : m_opcodeMetadata[opcode];
 
-			TraceLog(Format("-----\n0x%04lX  %02lX   %s  \n", PC, opcode, pMnemonic));
-			TraceLog(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
+			// Do some "smart" replacements to improve legibility for many opcodes
+			if (meta.baseMnemonic == "LDH")
+			{
+				mnemonic = Replace(mnemonic, "(n)", Format("(FF%sh)", DebugStringPeek8(PC + 1).c_str()));
+			}
+			else if (meta.baseMnemonic == "JR")
+			{
+				mnemonic = Replace(mnemonic, "n", Format("%sh (%04lX)", DebugStringPeek8(PC + 1).c_str(), PC + 2 + static_cast<Sint8>(Peek8(PC + 1))));
+			}
+			else //if (meta.size == 3)
+			{
+				mnemonic = Replace(mnemonic, "(nn)", Format("(%sh)", DebugStringPeek16(PC + 1).c_str()));
+				mnemonic = Replace(mnemonic, "nn", Format("%sh", DebugStringPeek16(PC + 1).c_str()));
+				mnemonic = Replace(mnemonic, "(n)", Format("(%sh)", DebugStringPeek8(PC + 1).c_str()));
+				mnemonic = Replace(mnemonic, "n", Format("%sh", DebugStringPeek8(PC + 1).c_str()));
+			}
+			//else if (meta.size == 2)
+			//{
+			//	mnemonic = Replace(mnemonic, "(n)", Format("(n==%sh)", DebugStringPeek8(PC + 1).c_str()));
+			//	mnemonic = Replace(mnemonic, "n", Format("n==%sh", DebugStringPeek8(PC + 1).c_str()));
+			//}
+
+			//TraceLog(Format("-----\n0x%04lX  %02lX   %s  \n", PC, opcode, pMnemonic));
+			//TraceLog(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
+			//	A,
+			//	GetFlagValue(FlagBitIndex::Zero) ? "Z" : "z",
+			//	GetFlagValue(FlagBitIndex::Subtract) ? "S" : "s",
+			//	GetFlagValue(FlagBitIndex::HalfCarry) ? "H" : "h",
+			//	GetFlagValue(FlagBitIndex::Carry) ? "C" : "c", 
+			//	B, C, D, E, H, L));
+			//TraceLog(Format("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0));
+			//TraceLog(Format("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str()));
+			////printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(PC + 1)));
+			//TraceLog(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
+			// Format partly inspired from VisualBoyAdvance and then bastardized...
+			TraceLog(Format("[%04x] %-16s AF=%02x%02x BC=%02x%02x DE=%02x%02x HL=%02x%02x SP=%04x %c%c%c%c LY=%d %c%c\n",
+				PC,
+				mnemonic.c_str(),
 				A,
-				GetFlagValue(FlagBitIndex::Zero) ? "Z" : "z",
-				GetFlagValue(FlagBitIndex::Subtract) ? "S" : "s",
-				GetFlagValue(FlagBitIndex::HalfCarry) ? "H" : "h",
-				GetFlagValue(FlagBitIndex::Carry) ? "C" : "c", 
-				B, C, D, E, H, L));
-			TraceLog(Format("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0));
-			TraceLog(Format("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str()));
-			//printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(PC + 1)));
-			TraceLog(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
+				F,
+				B,
+				C,
+				D,
+				E,
+				H,
+				L,
+				SP,
+				GetFlagValue(FlagBitIndex::Zero) ? 'Z' : 'z',
+				GetFlagValue(FlagBitIndex::Subtract) ? 'S' : 's',
+				GetFlagValue(FlagBitIndex::HalfCarry) ? 'H' : 'h',
+				GetFlagValue(FlagBitIndex::Carry) ? 'C' : 'c',
+				Peek8(0xFF44), // LY
+				((IF & Bit1) != 0) ? 'V' : 'v',
+				IME ? 'I' : 'i'));
 		}
 	}
 
@@ -2080,8 +2210,8 @@ private:
 	Uint32 m_totalOpcodesExecuted;
 	bool m_traceEnabled;
 	std::string m_traceLog;
-	OpcodeMetadata m_opcodeMetadata[0x100];
-	OpcodeMetadata m_extendedOpcodeMetadata[0x100];
+	OpcodeMetadataArray m_opcodeMetadata;
+	OpcodeMetadataArray m_extendedOpcodeMetadata;
 
 	std::shared_ptr<MemoryBus> m_pMemory;
 };

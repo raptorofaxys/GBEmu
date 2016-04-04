@@ -62,6 +62,9 @@ public:
 		m_pMemoryBus->AddDevice(m_pUnknownMemoryMappedRegisters);
 		m_pMemoryBus->LockDevices();
 
+		//m_pCpu->ResetTraceLog();
+		//m_pCpu->TraceLog(Format("\n\nNew run on %s\n\n", m_pRom->GetRomName().c_str()));
+
 		Reset();
 	}
 
@@ -82,6 +85,7 @@ public:
 		m_debuggerState = DebuggerState::Running;
 		//m_debuggerState = DebuggerState::SingleStepping;
 		m_breakpointAddress = -1;
+		m_lastUpdateAddress = -1;
 
 		m_pMemoryBus->Reset();
 		m_pMemory->Reset();
@@ -147,30 +151,47 @@ public:
 	
 		const float timePerClockCycle = 1.0f / MemoryBus::kCyclesPerSecond;
 
-		while (m_cyclesRemaining > 0)
+		for (;;)
 		{
-			auto instructionCycles = m_pCpu->ExecuteSingleInstruction();
-			m_totalCyclesExecuted += instructionCycles;
-			g_totalCyclesExecuted += instructionCycles;
-			m_cyclesRemaining -= instructionCycles;
-
-			auto timeSpentOnInstruction = timePerClockCycle * instructionCycles;
-
-			m_pTimer->Update(timeSpentOnInstruction);
-			m_pJoypad->Update(timeSpentOnInstruction);
-			m_pLcd->Update(timeSpentOnInstruction);
-			m_pSound->Update(timeSpentOnInstruction);
-
-			if ((m_pCpu->GetPC() == m_breakpointAddress) || s_stopOnNextInstruction)
+			if (m_pCpu->GetPC() != m_lastUpdateAddress)
 			{
-				Stop();
-				m_breakpointAddress = -1;
-				s_stopOnNextInstruction = false;
+				if ((m_pCpu->GetPC() == m_breakpointAddress) || s_stopOnNextInstruction)
+				{
+					Stop();
+					m_breakpointAddress = -1;
+					s_stopOnNextInstruction = false;
+				}
+
+				m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
+				//m_pCpu->SetTraceEnabled(true);
+				m_pCpu->DebugNextOpcode();
+
+				if (m_debuggerState == DebuggerState::SingleStepping)
+				{
+					m_pCpu->FlushTraceLog();
+				}
+				
+				m_lastUpdateAddress = m_pCpu->GetPC();
 			}
 
-			m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
-			//m_pCpu->SetTraceEnabled(true);
-			m_pCpu->DebugNextOpcode();
+			if (m_cyclesRemaining > 0)
+			{
+				auto instructionCycles = m_pCpu->ExecuteSingleInstruction();
+				m_totalCyclesExecuted += instructionCycles;
+				g_totalCyclesExecuted += instructionCycles;
+				m_cyclesRemaining -= instructionCycles;
+
+				auto timeSpentOnInstruction = timePerClockCycle * instructionCycles;
+
+				m_pTimer->Update(timeSpentOnInstruction);
+				m_pJoypad->Update(timeSpentOnInstruction);
+				m_pLcd->Update(timeSpentOnInstruction);
+				m_pSound->Update(timeSpentOnInstruction);
+			}
+			else
+			{
+				break;
+			}
 		}
 
 		//@TODO: synchronize updates to LCD controller vblanks to avoid tearing
@@ -196,4 +217,5 @@ private:
 	float m_cyclesRemaining;
 	DebuggerState m_debuggerState;
 	Sint32 m_breakpointAddress;
+	Sint32 m_lastUpdateAddress;
 };
