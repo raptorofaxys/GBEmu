@@ -95,6 +95,8 @@ public:
 
 	void Update(float seconds)
 	{
+		const float timeStep = 1.0f / MemoryBus::kCyclesPerSecond;
+
 		// Documentation on the exact timing here quotes various numbers.
 		m_updateTimeLeft += seconds;
 
@@ -111,43 +113,46 @@ public:
 						++m_scanLine;
 						++LY;
 
-						if (LY == LYC)
-						{
-							if (STAT & Bit6)
-							{
-								m_pCpu->SignalInterrupt(Bit1);
-							}
-
-							STAT |= Bit2;
-						}
-						else
-						{
-							STAT &= ~Bit2;
-						}
-
 						if (m_scanLine > 153)
 						{
 							m_scanLine = 0;
 							LY = 0;
 						}
 
+						if (LY == LYC)
+						{
+							STAT |= Bit2;
+
+							if (STAT & Bit6)
+							{
+								m_pCpu->SignalInterrupt(Bit1);
+							}
+						}
+						else
+						{
+							STAT &= ~Bit2;
+						}
+
 						RenderScanline();
 
-						m_updateTimeLeft -= 0.000019f;
+						//m_updateTimeLeft -= 0.000019f;
+						m_updateTimeLeft -= 80 * timeStep;
 						mode = 2;
 						m_nextState = State::ReadingOamAndVram;
 					}
 					break;
 				case State::ReadingOamAndVram:
 					{
-						m_updateTimeLeft -= 0.000041f;
+						//m_updateTimeLeft -= 0.000041f;
+						m_updateTimeLeft -= 172 * timeStep;
 						mode = 3;
 						m_nextState = State::HBlank;
 					}
 					break;
 				case State::HBlank:
 					{
-						m_updateTimeLeft -= 0.0000486f;
+						//m_updateTimeLeft -= 0.0000486f;
+						m_updateTimeLeft -= 204 * timeStep;
 						mode = 0;
 						m_nextState = State::ReadingOam;
 					}
