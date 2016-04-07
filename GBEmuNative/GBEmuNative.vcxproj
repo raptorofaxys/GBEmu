@@ -95,6 +95,7 @@
     <ClCompile Include="Emulator.cpp" />
     <ClCompile Include="GameBoy.cpp" />
     <ClCompile Include="MemoryBus.cpp" />
+    <ClCompile Include="TraceLog.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -111,6 +112,7 @@
     <ClInclude Include="RomOnlyMapper.h" />
     <ClInclude Include="Sound.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="TraceLog.h" />
     <ClInclude Include="UnknownMemoryMappedRegisters.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Utils.h" />

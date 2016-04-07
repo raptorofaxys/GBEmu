@@ -33,4 +33,4 @@ protected:
 	}
 };
 
-#define SERVICE_MMR_RW(x) case Registers::x: { if (requestType == MemoryRequestType::Read) { value = x; } else { x = value; } return true; } break;
+#define SERVICE_MMR_RW(x) case Registers::x: { if (TraceLog::IsEnabled()) { TraceLog::Log(Format("MMR: %s to %s (at 0x%04lX)\n", requestType == MemoryRequestType::Read ? "read" : "write", #x, static_cast<Uint16>(Registers::x))); } if (requestType == MemoryRequestType::Read) { value = x; } else { x = value; } return true; } break;

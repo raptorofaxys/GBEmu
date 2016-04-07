@@ -62,8 +62,9 @@ public:
 		m_pMemoryBus->AddDevice(m_pUnknownMemoryMappedRegisters);
 		m_pMemoryBus->LockDevices();
 
-		//m_pCpu->ResetTraceLog();
-		//m_pCpu->TraceLog(Format("\n\nNew run on %s\n\n", m_pRom->GetRomName().c_str()));
+		TraceLog::SetEnabled(true);
+		TraceLog::Reset();
+		TraceLog::Log(Format("\n\nNew run on %s\n\n", m_pRom->GetRomName().c_str()));
 
 		Reset();
 	}
@@ -162,13 +163,13 @@ public:
 					s_stopOnNextInstruction = false;
 				}
 
-				m_pCpu->SetTraceEnabled(m_debuggerState == DebuggerState::SingleStepping);
-				//m_pCpu->SetTraceEnabled(true);
+				TraceLog::SetEnabled(m_debuggerState == DebuggerState::SingleStepping);
+				//TraceLog::SetEnabled(true);
 				m_pCpu->DebugNextOpcode();
 
 				if (m_debuggerState == DebuggerState::SingleStepping)
 				{
-					m_pCpu->FlushTraceLog();
+					TraceLog::Flush();
 				}
 				
 				m_lastUpdateAddress = m_pCpu->GetPC();

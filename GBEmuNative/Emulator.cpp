@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <memory>
 #include <vector>
+#include <chrono>
 
 #include <Windows.h>
 #include <direct.h>
@@ -88,10 +89,10 @@ int main(int argc, char **argv)
 
 		bool done = false;
 
-		Uint32 lastTicks = SDL_GetTicks();
+		auto lastMilliseconds = GetMilliseconds();
 		
 		float averageSeconds = -1.0f;
-		Uint32 lastPrintTicks = 0;
+		auto lastPrintMilliseconds = static_cast<int64_t>(0);
 
 		while (!done)
 		{
@@ -128,23 +129,25 @@ int main(int argc, char **argv)
 		        }
 		    }
 
-			Uint32 ticks = SDL_GetTicks();
+			auto milliseconds = GetMilliseconds();
 
-			auto seconds = (ticks - lastTicks) / 1000.0f;
+			auto elapsedMilliseconds = milliseconds - lastMilliseconds;
+			auto seconds = elapsedMilliseconds / 1000.0f;
+
 			static float maxTimeStep = 0.1f;
 			seconds = SDL_min(seconds, maxTimeStep);
 
 			static float averagingRate = 0.5f;
 			averageSeconds = (averageSeconds > 0.0f) ? (averageSeconds * (1.0f - averagingRate) + (seconds * averagingRate)) : seconds;
-			if (ticks - lastPrintTicks > 1000)
+			if (milliseconds - lastPrintMilliseconds > 1000)
 			{
 				SDL_SetWindowTitle(pWindow.get(), Format("%s - %3.1f FPS", gameName.c_str(), 1.0f / averageSeconds).c_str());
 				//printf("%3.1f FPS\n", 1.0f / averageSeconds);
-				lastPrintTicks = ticks;
+				lastPrintMilliseconds = milliseconds;
 			}
 
 			gb.Update(seconds);
-			lastTicks = ticks;
+			lastMilliseconds = milliseconds;
 
 		    SDL_RenderClear(pRenderer.get());
 		    SDL_RenderCopy(pRenderer.get(), gb.GetFrontFrameBufferTexture(), NULL, NULL);

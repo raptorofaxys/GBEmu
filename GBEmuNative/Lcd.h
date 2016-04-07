@@ -512,10 +512,18 @@ public:
 	{
 		if (ServiceMemoryRangeRequest(requestType, address, value, kVramBase, kVramSize, m_vram))
 		{
+			if (TraceLog::IsEnabled())
+			{
+				TraceLog::Log(Format("LCD: VRAM access: %s at 0x%04lX, value 0x%02X\n", requestType == MemoryRequestType::Read ? "read" : "write", address, value));
+			}
 			return true;
 		}
 		else if (ServiceMemoryRangeRequest(requestType, address, value, kOamBase, kOamSize, m_oam))
 		{
+			if (TraceLog::IsEnabled())
+			{
+				TraceLog::Log(Format("LCD: OAM access: %s at 0x%04lX, value 0x%02X\n", requestType == MemoryRequestType::Read ? "read" : "write", address, value));
+			}
 			return true;
 		}
 		else
@@ -567,7 +575,7 @@ public:
 						{
 							m_pMemoryUnsafe->Write8(dmaDestinationAddress, m_pMemoryUnsafe->Read8(dmaSourceAddress));
 						}
-						//@TODO: DMA transfer time emulation
+						//@TODO: DMA transfer time emulation (671 cycles)
 					}
 					else
 					{

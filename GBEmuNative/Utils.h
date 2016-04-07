@@ -3,6 +3,7 @@
 #include <functional>
 #include <vector>
 #include <memory>
+#include <chrono>
 
 #include "SDL.h"
 #include <Windows.h>
@@ -45,6 +46,12 @@ inline bool GetBitValue(Uint8 byte, Uint8 position)
 inline bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
 {
 	return (address >= base) && (address < base + rangeSize);
+}
+
+inline int64_t GetMilliseconds()
+{
+	return std::chrono::duration_cast<std::chrono::milliseconds>
+		(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);

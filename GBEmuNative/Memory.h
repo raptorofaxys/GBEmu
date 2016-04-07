@@ -35,6 +35,7 @@ private:
 	{
 		if (ServiceMemoryRangeRequest(requestType, address, value, kWorkMemoryBase, kWorkMemorySize, m_workMemory))
 		{
+			//add logging to see who writes the sprite sheet to 0xC800-...
 			return true;
 		}
 		else if (ServiceMemoryRangeRequest(requestType, address, value, kEchoBase, kEchoSize, m_workMemory))

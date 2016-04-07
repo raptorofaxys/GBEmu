@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MemoryBus.h"
+#include "TraceLog.h"
 
 #include <memory>
 #include <algorithm>
@@ -40,7 +41,7 @@ public:
 
 	Cpu(const std::shared_ptr<MemoryBus>& memory)
 		: m_pMemory(memory)
-//		, m_pTraceLog(nullptr)
+//		, m_pTraceLog::Log(nullptr)
 	{
 		ComputeTracingData();
 
@@ -49,14 +50,7 @@ public:
 
 	void Reset()
 	{
-		//if (m_pTraceLog)
-		//{
-		//	fclose(m_pTraceLog);
-		//	m_pTraceLog = nullptr;
-		//}
-
 		m_totalOpcodesExecuted = 0;
-		m_traceEnabled = false;
 
 		m_cpuHalted = false;
 		m_cpuStopped = false;
@@ -157,46 +151,6 @@ public:
 
 		SDL_assert(instructionCycles != -1);
 		return instructionCycles;
-	}
-
-	void SetTraceEnabled(bool enabled)
-	{
-		m_traceEnabled = enabled;
-	}
-
-#define TRACELOG_FILENAME "tracelog.txt"
-
-	void FlushTraceLog()
-	{
-		FILE* pFile;
-		fopen_s(&pFile, TRACELOG_FILENAME, "a");
-		if (pFile)
-		{
-			fwrite(m_traceLog.data(), m_traceLog.length(), 1, pFile);
-			fclose(pFile);
-		}
-		m_traceLog.clear();
-	}
-
-	void ResetTraceLog()
-	{
-		FILE* pFile;
-		fopen_s(&pFile, TRACELOG_FILENAME, "wb");
-		if (pFile)
-		{
-			fclose(pFile);
-		}
-	}
-
-	void TraceLog(const std::string& message)
-	{
-		m_traceLog += message;
-
-		static int const DUMP_BUFFER_SIZE = 10000;
-		if (m_traceLog.length() > DUMP_BUFFER_SIZE)
-		{
-			FlushTraceLog();
-		}
 	}
 
 private:
@@ -1912,7 +1866,7 @@ private:
 
 	void DebugOpcode(Uint8 opcode)
 	{
-		if (m_traceEnabled)
+		if (TraceLog::IsEnabled())
 		{
 			//SetForegroundConsoleColor();
 
@@ -1942,20 +1896,21 @@ private:
 			//	mnemonic = Replace(mnemonic, "n", Format("n==%sh", DebugStringPeek8(PC + 1).c_str()));
 			//}
 
-			//TraceLog(Format("-----\n0x%04lX  %02lX   %s  \n", PC, opcode, pMnemonic));
-			//TraceLog(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
+			//TraceLog::Log(Format("-----\n0x%04lX  %02lX   %s  \n", PC, opcode, pMnemonic));
+			//TraceLog::Log(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
 			//	A,
 			//	GetFlagValue(FlagBitIndex::Zero) ? "Z" : "z",
 			//	GetFlagValue(FlagBitIndex::Subtract) ? "S" : "s",
 			//	GetFlagValue(FlagBitIndex::HalfCarry) ? "H" : "h",
 			//	GetFlagValue(FlagBitIndex::Carry) ? "C" : "c", 
 			//	B, C, D, E, H, L));
-			//TraceLog(Format("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0));
-			//TraceLog(Format("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str()));
+			//TraceLog::Log(Format("AF: 0x%04lX BC: 0x%04lX DE: 0x%04lX HL: 0x%04lX SP: 0x%04lX IME: %d\n", AF, BC, DE, HL, SP, IME ? 1 : 0));
+			//TraceLog::Log(Format("n: 0x%s nn: 0x%s\n", DebugStringPeek8(PC + 1).c_str(), DebugStringPeek16(PC + 1).c_str()));
 			////printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(PC + 1)));
-			//TraceLog(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
+			//TraceLog::Log(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
 			// Format partly inspired from VisualBoyAdvance and then bastardized...
-			TraceLog(Format("[%04x] %-16s AF=%02x%02x BC=%02x%02x DE=%02x%02x HL=%02x%02x SP=%04x %c%c%c%c LY=%d %c%c\n",
+			TraceLog::Log(Format("CPU %08d: [%04x] %-16s AF=%02x%02x BC=%02x%02x DE=%02x%02x HL=%02x%02x SP=%04x %c%c%c%c LY=%d %c%c\n",
+				m_totalOpcodesExecuted,
 				PC,
 				mnemonic.c_str(),
 				A,
@@ -2165,6 +2120,7 @@ private:
 	{
 		if (IF & IE & bit)
 		{
+			TraceLog::Log(Format("Calling interrupt vector 0x%02lX", bit));
 			IF &= ~bit;
 			CallI(vector);
 			return true;
@@ -2208,8 +2164,6 @@ private:
 	bool m_cpuStopped;
 
 	Uint32 m_totalOpcodesExecuted;
-	bool m_traceEnabled;
-	std::string m_traceLog;
 	OpcodeMetadataArray m_opcodeMetadata;
 	OpcodeMetadataArray m_extendedOpcodeMetadata;
 
