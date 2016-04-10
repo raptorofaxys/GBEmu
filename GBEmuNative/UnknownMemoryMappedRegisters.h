@@ -11,6 +11,7 @@ class UnknownMemoryMappedRegisters: public IMemoryBusDevice
 		// This device is always at the end of the chain, and it will catch things that fall through everything else
 		if (IsAddressInRange(address, kIoBase, kIoSize))
 		{
+			// Do nothing
 			return true;
 		}
 

@@ -195,7 +195,8 @@ public:
 	class FrequencySweep
 	{
 	public:
-		// This unit really is super strange according to the docs... lots of little strange corner cases.  Used both http://problemkaputt.de/pandocs.htm and http://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware to cobble something together that sounded sort of OK.
+		// This unit really is super strange according to the docs... lots of little strange corner cases.
+		// Used both http://problemkaputt.de/pandocs.htm and http://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware to cobble something together that sounded sort of OK.
 		FrequencySweep(const Uint8& NRx0, Uint8& NRx3, Uint8& NRx4, LengthCounter& lengthCounter)
 			: m_NRx0(NRx0)
 			, m_NRx3(NRx3)

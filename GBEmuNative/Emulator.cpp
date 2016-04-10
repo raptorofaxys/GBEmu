@@ -32,7 +32,6 @@ int main(int argc, char **argv)
 			}
 		}
 
-		//@TODO: change targetname per configuration
 		ProcessConsole console;
 
 		SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
@@ -45,7 +44,6 @@ int main(int argc, char **argv)
 		Janitor j([] { SDL_Quit(); });
 
 		std::shared_ptr<SDL_Window> pWindow(SDL_CreateWindow("GBEmu", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Lcd::kScreenWidth * 4, Lcd::kScreenHeight * 4, 0), SDL_DestroyWindow);
-
 		if (!pWindow)
 		{
 			throw Exception("Couldn't create window");
@@ -57,31 +55,6 @@ int main(int argc, char **argv)
 			throw Exception("Couldn't create renderer");
 		}
 
-		//GameBoy gb("cpu_instrs\\cpu_instrs.gb", pRenderer.get());
-		//GameBoy gb("cpu_instrs\\source\\test.gb");
-		//GameBoy gb("cpu_instrs\\individual\\01-special.gb");
-		//GameBoy gb("cpu_instrs\\individual\\02-interrupts.gb");
-		//GameBoy gb("cpu_instrs\\individual\\03-op sp,hl.gb");
-		//GameBoy gb("cpu_instrs\\individual\\04-op r,imm.gb");
-		//GameBoy gb("cpu_instrs\\individual\\05-op rp.gb");
-		//GameBoy gb("cpu_instrs\\individual\\06-ld r,r.gb");
-		//GameBoy gb("cpu_instrs\\individual\\07-jr,jp,call,ret,rst.gb");
-		//GameBoy gb("cpu_instrs\\individual\\08-misc instrs.gb");
-		//GameBoy gb("cpu_instrs\\individual\\09-op r,r.gb");
-		//GameBoy gb("cpu_instrs\\individual\\10-bit ops.gb");
-		//GameBoy gb("cpu_instrs\\individual\\11-op a,(hl).gb");
-		//GameBoy gb("dmg_sound\\dmg_sound.gb", pRenderer.get());
-		//GameBoy gb("dmg_sound-2\\dmg_sound.gb", pRenderer.get());
-
-		//GameBoy gb("Alleyway (JUE) [!].gb", pRenderer.get()); // messed up attract mode
-		//GameBoy gb("Balloon Kid (JUE) [!].gb", pRenderer.get());
-		//GameBoy gb("F-1 Race (JUE) (V1.1) [!].gb", pRenderer.get()); // MBC2 + battery
-		//GameBoy gb("Metroid II - Return of Samus (UE) [!].gb", pRenderer.get());
-		//GameBoy gb("Radar Mission (UE) [!].gb", pRenderer.get());
-		//GameBoy gb("SolarStriker (JU) [!].gb", pRenderer.get()); // keeps LCD disabled
-		//GameBoy gb("Super Mario Land (JUE) (V1.1) [!].gb", pRenderer.get());
-		//GameBoy gb("Tetris (JUE) (V1.1) [!].gb", pRenderer.get());
-		//GameBoy gb("Turok - Battle of the Bionosaurs (UE) (M4) [!].gb", pRenderer.get());
 		GameBoy gb(argv[2], pRenderer.get());
 
 		const auto& gameName = gb.GetRom().GetRomName();
@@ -129,10 +102,12 @@ int main(int argc, char **argv)
 		        }
 		    }
 
+			// Time- and FPS-tracking logic
 			auto milliseconds = GetMilliseconds();
 
 			auto elapsedMilliseconds = milliseconds - lastMilliseconds;
 			auto seconds = elapsedMilliseconds / 1000.0f;
+			lastMilliseconds = milliseconds;
 
 			static float maxTimeStep = 0.1f;
 			seconds = SDL_min(seconds, maxTimeStep);
@@ -147,7 +122,6 @@ int main(int argc, char **argv)
 			}
 
 			gb.Update(seconds);
-			lastMilliseconds = milliseconds;
 
 		    SDL_RenderClear(pRenderer.get());
 		    SDL_RenderCopy(pRenderer.get(), gb.GetFrontFrameBufferTexture(), NULL, NULL);

@@ -5,7 +5,10 @@
 #include <string>
 #include <stdio.h>
 
-#define TRACELOG_FILENAME "tracelog.txt"
+namespace
+{
+	static const char* TRACELOG_FILENAME = "tracelog.txt";
+}
 
 namespace TraceLog
 {

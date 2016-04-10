@@ -543,7 +543,7 @@ private:
 		// Algorithm adapted from DKParrot's post on http://ngemu.com/threads/little-help-with-my-gameboy-emulator.143814/
 		// Seems to be relatively little documentation regarding this peculiar opcode other than other emulators' source.
 		// Since getting this right with all the edge cases from first principles looks like an exercise in pedanticism
-		// and the implementation of this specific opcode is not of particular interest to me, I chose to adapt an existing
+		// and since the implementation of this specific opcode is not of particular interest to me, I chose to adapt an existing
 		// implementation and move on with my life.
 		Sint32 value = A;
 

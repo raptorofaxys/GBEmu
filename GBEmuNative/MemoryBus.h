@@ -65,7 +65,8 @@ public:
 
 		if (dataBreakpointActive && (address == dataBreakpointAddress))
 		{
-			int x = 3;
+			static volatile int x = 3;
+			++x;
 		}
 
 		SDL_assert(m_devicesLocked);
@@ -105,7 +106,8 @@ public:
 	{
 		if (dataBreakpointActive && (address == dataBreakpointAddress))
 		{
-			int x = 3;
+			static volatile int x = 3;
+			++x;
 		}
 
 		SDL_assert(m_devicesLocked);
@@ -135,9 +137,10 @@ private:
 		// WARNING: this logic assumes reading is a completely "const" operation, and that it changes the state of the hardware in no way.
 		// This is definitely not true on many platforms, but it appears to be the case on GB.  If this assumption does not hold true,
 		// we'll have to add another method or perhaps MemoryRequestType to probe the address without altering state.
-		int& deviceIndexAtAddress = m_deviceIndexAtAddress[address];
+		auto& deviceIndexAtAddress = m_deviceIndexAtAddress[address];
 		if (deviceIndexAtAddress == MemoryDeviceStatus::Unknown)
 		{
+			// We want to cache which device services requests for a given memory address, because scanning through the devices each time an access occurs is very slow.
 			// very fast
 			//if (m_devicesUnsafe[0]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
 			//if (m_devicesUnsafe[1]->HandleRequest(MemoryRequestType::Read, address, result)) { return result; }
@@ -148,22 +151,16 @@ private:
 			// About the same speed as the range-based for in release
 			//auto end = m_devicesUnsafe.data() + m_devicesUnsafe.size();
 			//for (IMemoryBusDevice** ppDevice = m_devicesUnsafe.data(); ppDevice != end; ++ppDevice)
-			auto numDevices = m_devicesUnsafe.size();
-			for (size_t deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex) // 10-12x slower
+			auto numDevices = static_cast<Sint8>(m_devicesUnsafe.size());
+			SDL_assert(numDevices > 0);
+			for (Sint8 deviceIndex = 0; deviceIndex < numDevices; ++deviceIndex) // 10-12x slower
 			{
 				const auto& pDevice = m_devicesUnsafe[deviceIndex];
 				Uint8 result;
 				if (pDevice->HandleRequest(MemoryRequestType::Read, address, result))
 				{
-					if (deviceIndexAtAddress == MemoryDeviceStatus::Unknown)
-					{
-						deviceIndexAtAddress = deviceIndex;
-						break;
-					}
-					//else
-					//{
-					//	throw Exception("Two memory devices handle address 0x%04lX", address);
-					//}
+					deviceIndexAtAddress = deviceIndex;
+					break;
 				}
 			}
 			
@@ -178,5 +175,5 @@ private:
 	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;
 	std::vector<IMemoryBusDevice*> m_devicesUnsafe;
 
-	int m_deviceIndexAtAddress[kAddressSpaceSize]; // it's good to be in 2014 - this could be much more efficient in terms of space but there's no need for that right now
+	Sint8 m_deviceIndexAtAddress[kAddressSpaceSize]; // it's good to be in 2014(2015(2016)) - this could be much more efficient in terms of space but there's no need for that right now
 };

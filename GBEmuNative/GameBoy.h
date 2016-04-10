@@ -194,8 +194,6 @@ public:
 				break;
 			}
 		}
-
-		//@TODO: synchronize updates to LCD controller vblanks to avoid tearing
 	}
 
 private:

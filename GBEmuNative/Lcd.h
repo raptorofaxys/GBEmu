@@ -56,8 +56,6 @@ public:
 		m_pBackBuffer = createBufferFunc();
 		m_pFrontBuffer = createBufferFunc();
 
-		//@TODO SDL_QueryTexture
-		//SDL_assert()
 		Reset();
 	}
 
@@ -316,8 +314,6 @@ public:
 			SDL_LockTexture(m_pBackBuffer.get(), NULL, &pPixels, &pitch);
 
 			Uint32* pARGB = reinterpret_cast<Uint32*>(static_cast<Uint8*>(pPixels) + LY * pitch);
-
-			//static Uint8 palette[] = {0xFF, 0xC0, }
 
 			static int c = 0;
 			for (int screenX = 0; screenX < kScreenWidth; ++screenX)
