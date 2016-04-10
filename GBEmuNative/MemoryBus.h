@@ -42,8 +42,13 @@ public:
 		m_devicesUnsafe.push_back(pDevice.get());
 	}
 
-	void LockDevices()
+	void LockDevices(Analyzer* pAnalyzer)
 	{
+		for (auto& device : m_devicesUnsafe)
+		{
+			device->SetAnalyzer(pAnalyzer);
+		}
+
 		for (Uint32 address = 0; address < kAddressSpaceSize; ++address)
 		{
 			m_deviceIndexAtAddress[address] = MemoryDeviceStatus::Unknown;

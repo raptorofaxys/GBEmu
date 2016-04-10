@@ -13,6 +13,7 @@ namespace CpuMetadata
 	// The following functions were preprocessed using a spreadsheet from http://imrannazar.com/Gameboy-Z80-Opcode-Map and http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
 	const char* GetOpcodeMnemonic(Uint8 opcode)
 	{
+		//@TODO: change n/nn to something clearer to assist disassembly and simplify replacement logic
 		static const char* opcodeMnemonics[256] =
 		{
 			"NOP", "LD BC,nn", "LD (BC),A", "INC BC", "INC B", "DEC B", "LD B,n", "RLC A", "LD (nn),SP", "ADD HL,BC", "LD A,(BC)", "DEC BC", "INC C", "DEC C", "LD C,n", "RRC A",

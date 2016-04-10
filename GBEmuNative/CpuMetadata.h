@@ -23,9 +23,5 @@ namespace CpuMetadata
 		bool illegal;
 	};
 
-	//bool IsExtendedOpcode(Uint8 opcode);
-	//Uint8 GetOpcodeSize(Uint8 opcode);
-	//Uint8 GetExtendedOpcodeSize(Uint8 opcode);
-	//Uint8 GetOpcodeSize(Uint8 byte1, Uint8 byte2);
 	const OpcodeMetadata& GetOpcodeMetadata(Uint8 byte1, Uint8 byte2);
 }

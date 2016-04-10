@@ -404,20 +404,23 @@ private:
 
 	void Call(Uint16 address)
 	{
+		GetAnalyzer()->OnPreCall(address);
 		Push16(PC);
 		PC = address;
 	}
 
 	void CallI(Uint16 address)
 	{
-		GetAnalyzer()->OnCallInterrupt(address);
+		GetAnalyzer()->OnPreCallInterrupt(address);
 		IME = false;
 		Call(address);
 	}
 
 	void Ret()
 	{
+		GetAnalyzer()->OnPreReturn(PC - 1);
 		PC = Pop16();
+		GetAnalyzer()->OnPostReturn();
 	}
 
 	template <int N> void NOP_0__0()

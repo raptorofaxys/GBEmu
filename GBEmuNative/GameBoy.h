@@ -69,11 +69,13 @@ public:
 		m_pMemoryBus->AddDevice(m_pLcd);
 		m_pMemoryBus->AddDevice(m_pSound);
 		m_pMemoryBus->AddDevice(m_pUnknownMemoryMappedRegisters);
-		m_pMemoryBus->LockDevices();
-
-		m_tracingState = TracingState::SingleSteppingOnly;
 
 		m_pAnalyzer.reset(new Analyzer(m_pMapper.get(), m_pCpu.get(), m_pMemoryBus.get()));
+
+		m_pMemoryBus->LockDevices(m_pAnalyzer.get());
+
+		m_tracingState = TracingState::Disabled;
+
 		SetAnalyzerTracingState();
 		m_pAnalyzer->OnStart(m_pRom->GetRomName().c_str());
 

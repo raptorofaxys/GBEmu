@@ -1,4 +1,7 @@
 #include "Analyzer.h"
+
+#if ENABLE_ANALYZER
+
 #include "CpuMetadata.h"
 
 #include "Cpu.h"
@@ -7,6 +10,23 @@
 #include "MemoryMapper.h"
 
 #include "TraceLog.h"
+
+#include <map>
+
+// Some ideas about disassembly:
+// -perform code flow analysis to track function entry and return points
+// -perform data flow analysis to identify function input parameters
+// -track number of reads and writes per call within a function to guess about a function being a form of memory copy
+// -track use of registers and device access
+// -user-assigned memory cell names
+// -user-assigned function names or generated "best guess" names based on function behaviour
+
+Analyzer::Analyzer(MemoryMapper* pMemoryMapper, Cpu* pCpu, MemoryBus* pMemory)
+{
+	m_pMemoryMapper = pMemoryMapper;
+	m_pCpu = pCpu;
+	m_pMemory = pMemory;
+}
 
 std::string Analyzer::DebugStringPeek8(Uint16 address)
 {
@@ -101,6 +121,7 @@ void Analyzer::OnStart(const char * pRomName)
 {
 	TraceLog::Reset();
 	TraceLog::Log(Format("\n\nNew run on %s\n\n", pRomName));
+	EnsureGlobalFunctionIsOnStack();
 }
 
 void Analyzer::OnPreExecuteOpcode()
@@ -108,18 +129,32 @@ void Analyzer::OnPreExecuteOpcode()
 	DebugNextOpcode();
 }
 
-void Analyzer::OnCall(Uint16 unmappedAddress)
+void Analyzer::OnPreCall(Uint16 unmappedAddress)
 {
 	auto ma = GetMappedAddress(unmappedAddress);
+	GetFunction(ma);
+	PushFunction(ma);
 }
 
-void Analyzer::OnCallInterrupt(Uint16 unmappedAddress)
-{
-}
-
-void Analyzer::OnReturn(Uint16 unmappedAddress)
+void Analyzer::OnPreCallInterrupt(Uint16 unmappedAddress)
 {
 	auto ma = GetMappedAddress(unmappedAddress);
+	PushFunction(ma);
+	GetTopFunction().isInterruptServiceRoutine = true;
+}
+
+void Analyzer::OnPreReturn(Uint16 returnStatementAddress)
+{
+	auto ma = GetMappedPC();
+	auto& func = GetTopFunction();
+	func.exitPoints.insert(ma);
+	PopFunction();
+}
+
+void Analyzer::OnPostReturn()
+{
+	//@TODO: validate that the return address is the expected one in case the software is doing funny things to the stack? would require storing the expected return address on the stack
+	//auto ma = GetMappedPC();
 }
 
 void Analyzer::OnVramAccess(MemoryRequestType requestType, Uint16 address, Uint8 value)
@@ -141,3 +176,48 @@ Analyzer::MappedAddress Analyzer::GetMappedAddress(Uint16 unmappedAddress)
 	SDL_assert(m_pMemoryMapper != nullptr);
 	return MappedAddress(m_pMemoryMapper->GetActiveBank(), unmappedAddress);
 }
+
+Analyzer::MappedAddress Analyzer::GetMappedPC()
+{
+	return GetMappedAddress(m_pCpu->GetPC());
+}
+
+void Analyzer::PushFunction(Analyzer::MappedAddress address)
+{
+	m_functionStack.push(address);
+}
+
+void Analyzer::PopFunction()
+{
+	m_functionStack.pop();
+
+	// Failsafe
+	if (m_functionStack.size() == 0)
+	{
+		EnsureGlobalFunctionIsOnStack();
+	}
+}
+
+Analyzer::AnalyzedFunction& Analyzer::GetTopFunction()
+{
+	return GetFunction(m_functionStack.top());
+}
+
+Analyzer::AnalyzedFunction& Analyzer::GetFunction(Analyzer::MappedAddress address)
+{
+	auto func = AnalyzedFunction();
+	func.entryPoint = address;
+	return m_functions.insert(std::make_pair(address, func)).first->second;
+}
+
+void Analyzer::EnsureGlobalFunctionIsOnStack()
+{
+	auto& ma = MappedAddress(0, 0x100);
+	GetFunction(ma);
+	if (m_functionStack.size() == 0)
+	{
+		PushFunction(ma);
+	}
+}
+
+#endif // #if ENABLE_ANALYZER

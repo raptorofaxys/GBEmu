@@ -34,7 +34,7 @@ protected:
 		}
 		return false;
 	}
-	Analyzer* GetAnalyzer() const { return m_pAnalyzer; }
+	Analyzer* GetAnalyzer() const { SDL_assert(m_pAnalyzer != nullptr); return m_pAnalyzer; }
 private:
 	Analyzer* m_pAnalyzer = nullptr;
 };
