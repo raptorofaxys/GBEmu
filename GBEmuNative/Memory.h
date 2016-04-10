@@ -1,8 +1,10 @@
+#pragma once
+
 #include "IMemoryBusDevice.h"
 
 #include "Utils.h"
 
-class Memory: public IMemoryBusDevice
+class Memory : public IMemoryBusDevice
 {
 public:
 	static const int kWorkMemoryBase = 0xC000;

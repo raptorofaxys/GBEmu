@@ -5,9 +5,14 @@
 #include "CpuMetadata.h"
 
 #include "Cpu.h"
+#include "GameLinkPort.h"
+#include "Joypad.h"
 #include "Lcd.h"
+#include "Memory.h"
 #include "MemoryBus.h"
 #include "MemoryMapper.h"
+#include "Sound.h"
+#include "Timer.h"
 
 #include "TraceLog.h"
 
@@ -18,6 +23,7 @@
 // -perform data flow analysis to identify function input parameters
 // -track number of reads and writes per call within a function to guess about a function being a form of memory copy
 // -track use of registers and device access
+//   -hmmm if non-CPU devices wind up reading/writing to memory bus other than the DMA controller, we'll need to isolate CPU accesses from other device accesses
 // -user-assigned memory cell names
 // -user-assigned function names or generated "best guess" names based on function behaviour
 
@@ -26,6 +32,7 @@ Analyzer::Analyzer(MemoryMapper* pMemoryMapper, Cpu* pCpu, MemoryBus* pMemory)
 	m_pMemoryMapper = pMemoryMapper;
 	m_pCpu = pCpu;
 	m_pMemory = pMemory;
+	EnsureGlobalFunctionIsOnStack();
 }
 
 std::string Analyzer::DebugStringPeek8(Uint16 address)
@@ -46,8 +53,10 @@ void Analyzer::DebugNextOpcode()
 {
 	if (TraceLog::IsEnabled())
 	{
+		DisableMemoryTrackingForScope dmtfs(*this);
+
 		const auto& meta = CpuMetadata::GetOpcodeMetadata(m_pMemory->Read8(m_pCpu->GetPC()), m_pMemory->Read8(m_pCpu->GetPC() + 1));
-		std::string mnemonic = meta.baseMnemonic;
+		std::string mnemonic = meta.fullMnemonic;
 
 		// Do some "smart" replacements to improve legibility for many opcodes
 		if (meta.baseMnemonic == "LDH")
@@ -122,11 +131,13 @@ void Analyzer::OnStart(const char * pRomName)
 	TraceLog::Reset();
 	TraceLog::Log(Format("\n\nNew run on %s\n\n", pRomName));
 	EnsureGlobalFunctionIsOnStack();
+	m_trackMemoryAccesses = true;
 }
 
 void Analyzer::OnPreExecuteOpcode()
 {
 	DebugNextOpcode();
+	++GetTopFunction().executedInstructionCount;
 }
 
 void Analyzer::OnPreCall(Uint16 unmappedAddress)
@@ -157,12 +168,102 @@ void Analyzer::OnPostReturn()
 	//auto ma = GetMappedPC();
 }
 
-void Analyzer::OnVramAccess(MemoryRequestType requestType, Uint16 address, Uint8 value)
+#define TRACK_DEVICE_USAGE(device, reg) if (address == static_cast<Uint16>(device::Registers::reg)) { func.uses##device = true; }
+#define TRACK_DEVICES() \
+	TRACK_DEVICE_USAGE(Timer, DIV) \
+	TRACK_DEVICE_USAGE(Timer, TIMA) \
+	TRACK_DEVICE_USAGE(Timer, TMA) \
+	TRACK_DEVICE_USAGE(Timer, TAC) \
+	TRACK_DEVICE_USAGE(Joypad, P1_JOYP) \
+	TRACK_DEVICE_USAGE(GameLinkPort, SB) \
+	TRACK_DEVICE_USAGE(GameLinkPort, SC) \
+	TRACK_DEVICE_USAGE(Lcd, LCDC) \
+	TRACK_DEVICE_USAGE(Lcd, STAT) \
+	TRACK_DEVICE_USAGE(Lcd, SCY) \
+	TRACK_DEVICE_USAGE(Lcd, SCX) \
+	TRACK_DEVICE_USAGE(Lcd, LY) \
+	TRACK_DEVICE_USAGE(Lcd, LYC) \
+	TRACK_DEVICE_USAGE(Lcd, DMA) \
+	TRACK_DEVICE_USAGE(Lcd, BGP) \
+	TRACK_DEVICE_USAGE(Lcd, OBP0) \
+	TRACK_DEVICE_USAGE(Lcd, OBP1) \
+	TRACK_DEVICE_USAGE(Lcd, WY) \
+	TRACK_DEVICE_USAGE(Lcd, WX) \
+	TRACK_DEVICE_USAGE(Sound, NR10) \
+	TRACK_DEVICE_USAGE(Sound, NR11) \
+	TRACK_DEVICE_USAGE(Sound, NR12) \
+	TRACK_DEVICE_USAGE(Sound, NR13) \
+	TRACK_DEVICE_USAGE(Sound, NR14) \
+	TRACK_DEVICE_USAGE(Sound, NR21) \
+	TRACK_DEVICE_USAGE(Sound, NR22) \
+	TRACK_DEVICE_USAGE(Sound, NR23) \
+	TRACK_DEVICE_USAGE(Sound, NR24) \
+	TRACK_DEVICE_USAGE(Sound, NR30) \
+	TRACK_DEVICE_USAGE(Sound, NR31) \
+	TRACK_DEVICE_USAGE(Sound, NR32) \
+	TRACK_DEVICE_USAGE(Sound, NR33) \
+	TRACK_DEVICE_USAGE(Sound, NR34) \
+	TRACK_DEVICE_USAGE(Sound, NR41) \
+	TRACK_DEVICE_USAGE(Sound, NR42) \
+	TRACK_DEVICE_USAGE(Sound, NR43) \
+	TRACK_DEVICE_USAGE(Sound, NR44) \
+	TRACK_DEVICE_USAGE(Sound, NR50) \
+	TRACK_DEVICE_USAGE(Sound, NR51) \
+	TRACK_DEVICE_USAGE(Sound, NR52)
+
+void Analyzer::OnPostRead8(Uint16 address, Uint8 value)
 {
+	if (!m_trackMemoryAccesses)
+	{
+		return;
+	}
+
+	auto& func = GetTopFunction();
+	++func.readCount;
+	TRACK_DEVICES();
+	if (IsAddressInRange(address, Memory::kHramMemoryBase, Memory::kHramMemorySize))
+	{
+		func.usesHighRam = true;
+	}
 }
 
-void Analyzer::OnOamAccess(MemoryRequestType requestType, Uint16 address, Uint8 value)
+void Analyzer::OnPostWrite8(Uint16 address, Uint8 value)
 {
+	if (!m_trackMemoryAccesses)
+	{
+		return;
+	}
+
+	auto& func = GetTopFunction();
+	++func.writeCount;
+	TRACK_DEVICES();
+	if (IsAddressInRange(address, Memory::kHramMemoryBase, Memory::kHramMemorySize))
+	{
+		func.usesHighRam = true;
+	}
+}
+#undef TRACK_DEVICE_USAGE
+
+void Analyzer::OnPostVramAccess(MemoryRequestType requestType, Uint16 address, Uint8 value)
+{
+	GetTopFunction().usesLcd = true;
+	GetTopFunction().usesVram = true;
+}
+
+void Analyzer::OnPostOamAccess(MemoryRequestType requestType, Uint16 address, Uint8 value)
+{
+	GetTopFunction().usesLcd = true;
+	GetTopFunction().usesOam = true;
+}
+
+void Analyzer::OnPostRomBankSwitch(Uint8 bankIndex)
+{
+	GetTopFunction().usesMapper = true;
+}
+
+void Analyzer::OnPostBankingModeSwitch()
+{
+	GetTopFunction().usesMapper = true;
 }
 
 void Analyzer::OnUnknownOpcode(Uint16 unmappedAddress)
@@ -185,6 +286,7 @@ Analyzer::MappedAddress Analyzer::GetMappedPC()
 void Analyzer::PushFunction(Analyzer::MappedAddress address)
 {
 	m_functionStack.push(address);
+	m_pTopFunction = &GetTopFunctionFromStack();
 }
 
 void Analyzer::PopFunction()
@@ -196,9 +298,15 @@ void Analyzer::PopFunction()
 	{
 		EnsureGlobalFunctionIsOnStack();
 	}
+	m_pTopFunction = &GetTopFunctionFromStack();
 }
 
 Analyzer::AnalyzedFunction& Analyzer::GetTopFunction()
+{
+	return *m_pTopFunction;
+}
+
+Analyzer::AnalyzedFunction& Analyzer::GetTopFunctionFromStack()
 {
 	return GetFunction(m_functionStack.top());
 }

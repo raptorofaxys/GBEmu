@@ -37,8 +37,14 @@ public:
 	void OnPreReturn(Uint16 returnStatementAddress) ELIDE_IF_ANALYZER_DISABLED
 	void OnPostReturn() ELIDE_IF_ANALYZER_DISABLED
 
-	void OnVramAccess(MemoryRequestType requestType, Uint16 address, Uint8 value) ELIDE_IF_ANALYZER_DISABLED
-	void OnOamAccess(MemoryRequestType requestType, Uint16 address, Uint8 value) ELIDE_IF_ANALYZER_DISABLED
+	void OnPostRead8(Uint16 address, Uint8 value) ELIDE_IF_ANALYZER_DISABLED
+	void OnPostWrite8(Uint16 address, Uint8 value) ELIDE_IF_ANALYZER_DISABLED
+
+	void OnPostVramAccess(MemoryRequestType requestType, Uint16 address, Uint8 value) ELIDE_IF_ANALYZER_DISABLED
+	void OnPostOamAccess(MemoryRequestType requestType, Uint16 address, Uint8 value) ELIDE_IF_ANALYZER_DISABLED
+
+	void OnPostRomBankSwitch(Uint8 bankIndex) ELIDE_IF_ANALYZER_DISABLED
+	void OnPostBankingModeSwitch() ELIDE_IF_ANALYZER_DISABLED
 	
 	void OnUnknownOpcode(Uint16 unmappedAddress) ELIDE_IF_ANALYZER_DISABLED
 
@@ -57,15 +63,18 @@ private:
 		Analyzer::MappedAddress entryPoint;
 		std::set<Analyzer::MappedAddress> exitPoints;
 		bool isInterruptServiceRoutine = false;
-		//bool usesTimer;
-		//bool usesJoypad;
-		//bool usesGameLinkPort;
-		//bool usesLcd;
-		//bool usesSound;
-		//bool usesHighRam;
-		//Uint32 readCount;
-		//Uint32 writeCount;
-		//Uint32 executedInstructionCount;
+		bool usesTimer = false;
+		bool usesJoypad = false;
+		bool usesGameLinkPort = false;
+		bool usesLcd = false;
+		bool usesVram = false;
+		bool usesOam = false;
+		bool usesSound = false;
+		bool usesMapper = false;
+		bool usesHighRam;
+		Uint32 readCount = 0;
+		Uint32 writeCount = 0;
+		Uint32 executedInstructionCount = 0;
 	};
 	using AnalyzedFunctionMap = std::map<Analyzer::MappedAddress, Analyzer::AnalyzedFunction>;
 	using AnalyzedFunctionStack = std::stack<Analyzer::MappedAddress>;
@@ -79,7 +88,8 @@ private:
 
 	void PushFunction(MappedAddress address);
 	void PopFunction();
-	AnalyzedFunction& GetTopFunction();
+	AnalyzedFunction& GetTopFunction(); // this is an optimization
+	AnalyzedFunction& GetTopFunctionFromStack(); //equivalent to GetTopFunction but slow
 	AnalyzedFunction& GetFunction(MappedAddress address);
 	void EnsureGlobalFunctionIsOnStack();
 
@@ -88,4 +98,24 @@ private:
 	MemoryBus* m_pMemory;
 	AnalyzedFunctionMap m_functions;
 	AnalyzedFunctionStack m_functionStack;
+	AnalyzedFunction* m_pTopFunction;
+
+	struct DisableMemoryTrackingForScope
+	{
+		DisableMemoryTrackingForScope(Analyzer& analyzer)
+			: m_analyzer(analyzer)
+		{
+			m_restoreValue = m_analyzer.m_trackMemoryAccesses;
+		}
+		
+		~DisableMemoryTrackingForScope()
+		{
+			m_analyzer.m_trackMemoryAccesses = m_restoreValue;
+		}
+
+		Analyzer& m_analyzer;
+		bool m_restoreValue;
+	};
+
+	bool m_trackMemoryAccesses = false;
 };

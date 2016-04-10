@@ -62,6 +62,7 @@ public:
 
 		static_assert(offsetof(Cpu, F) == offsetof(Cpu, AF), "Target machine is not little-endian; register unions must be revised");
 		PC = 0x0100;
+		m_PCAtInstructionStart = PC;
 		AF = 0x01B0;
 		BC = 0x0013;
 		DE = 0x00D8;
@@ -70,6 +71,7 @@ public:
 	}
 
 	auto GetPC() const { return PC; }
+	auto GetPCAtInstructionStart() const { return m_PCAtInstructionStart; }
 	auto GetA() const { return A; }
 	auto GetF() const { return F; }
 	auto GetB() const { return B; }
@@ -402,9 +404,13 @@ private:
 		SetFlagValue(FlagBitIndex::Carry, A < operand);
 	}
 
-	void Call(Uint16 address)
+	void Call(Uint16 address, bool tellAnalyzer = true)
 	{
-		GetAnalyzer()->OnPreCall(address);
+		if (tellAnalyzer)
+		{
+			GetAnalyzer()->OnPreCall(address);
+		}
+
 		Push16(PC);
 		PC = address;
 	}
@@ -413,12 +419,12 @@ private:
 	{
 		GetAnalyzer()->OnPreCallInterrupt(address);
 		IME = false;
-		Call(address);
+		Call(address, false);
 	}
 
 	void Ret()
 	{
-		GetAnalyzer()->OnPreReturn(PC - 1);
+		GetAnalyzer()->OnPreReturn(m_PCAtInstructionStart);
 		PC = Pop16();
 		GetAnalyzer()->OnPostReturn();
 	}
@@ -977,6 +983,9 @@ private:
 		// of virtual functions, we could simply use std::function (or raw function pointers), but that still means runtime branching.
 		// What's interesting is that the opcode case expression is constant, which means we could use template logic to get the compiler to generate the appropriate code for each individual opcode based on the case expression.
 		// This requires a case label per opcode, but it generates debuggable code in debug targets and very efficient code in release.  (Many LD variants compile to two MOV instructions.)
+
+		// Starting a new instruction, so bookmark this memory location in case we need to know where we started from for analysis purposes
+		m_PCAtInstructionStart = PC;
 
 		Uint8 opcode = Fetch8();
 		bool unknownOpcode = false;
@@ -1606,6 +1615,9 @@ private:
 			SDL_assert(false && "Unknown opcode encountered");
 		}
 
+		// Instruction is now complete
+		m_PCAtInstructionStart = PC;
+		
 		++m_totalExecutedOpcodes;
 
 		return instructionCycles;
@@ -1812,6 +1824,7 @@ private:
 
 	Uint16 SP;
 	Uint16 PC;
+	Uint16 m_PCAtInstructionStart;
 	bool IME; // whether interrupts are enabled - very special register, not memory-mapped
 
 	Uint8 IF;

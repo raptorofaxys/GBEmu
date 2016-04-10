@@ -82,11 +82,13 @@ public:
 			else if (IsAddressInRange(address, kRomBankNumberBase, kRomBankNumberSize))
 			{
 				m_romBankLower5Bits = value & 0x1F;
+				GetAnalyzer()->OnPostRomBankSwitch(GetEffectiveRamBankIndex());
 				return true;
 			}
 			else if (IsAddressInRange(address, kRomRamBase, kRomRamSize))
 			{
 				m_romRam2Bits = value & 0x03;
+				GetAnalyzer()->OnPostRomBankSwitch(GetEffectiveRamBankIndex());
 				return true;
 			}
 			else if (IsAddressInRange(address, kBankingModeBase, kBankingModeSize))
@@ -101,6 +103,7 @@ public:
 					throw Exception("Unsupported MBC1 RAM/ROM banking mode: %d", value);
 					break;
 				}
+				GetAnalyzer()->OnPostBankingModeSwitch();
 				return true;
 			}
 		}

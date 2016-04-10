@@ -74,7 +74,7 @@ public:
 
 		m_pMemoryBus->LockDevices(m_pAnalyzer.get());
 
-		m_tracingState = TracingState::Disabled;
+		m_tracingState = TracingState::Enabled;
 
 		SetAnalyzerTracingState();
 		m_pAnalyzer->OnStart(m_pRom->GetRomName().c_str());

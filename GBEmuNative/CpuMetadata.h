@@ -15,6 +15,7 @@ namespace CpuMetadata
 		{
 		}
 
+		std::string fullMnemonic;
 		std::string baseMnemonic;
 		std::vector<std::string> inputs;
 		std::vector<std::string> outputs;

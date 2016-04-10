@@ -44,6 +44,7 @@ public:
 
 	void LockDevices(Analyzer* pAnalyzer)
 	{
+		m_pAnalyzer = pAnalyzer;
 		for (auto& device : m_devicesUnsafe)
 		{
 			device->SetAnalyzer(pAnalyzer);
@@ -80,6 +81,7 @@ public:
 		{
 			Uint8 result = 0;
 			m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Read, address, result);
+			m_pAnalyzer->OnPostRead8(address, result);
 			return result;
 		}
 
@@ -120,6 +122,7 @@ public:
 		if (deviceIndex >= 0)
 		{
 			m_devicesUnsafe[deviceIndex]->HandleRequest(MemoryRequestType::Write, address, value);
+			m_pAnalyzer->OnPostWrite8(address, value);
 			return;
 		}
 
@@ -175,6 +178,8 @@ private:
 			}
 		}
 	}
+
+	Analyzer* m_pAnalyzer;
 
 	bool m_devicesLocked;
 	std::vector<std::shared_ptr<IMemoryBusDevice>> m_devices;

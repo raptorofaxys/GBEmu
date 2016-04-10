@@ -182,12 +182,13 @@ namespace CpuMetadata
 		return opcode == 0xCB;
 	}
 
-	void ParseMnemonic(const char* mnemonic, OpcodeMetadata& meta)
+	void ParseMnemonic(const char* fullMnemonic, OpcodeMetadata& meta)
 	{
+		meta.fullMnemonic = fullMnemonic;
 		std::string* pToken = &meta.baseMnemonic;
-		while (*mnemonic)
+		while (*fullMnemonic)
 		{
-			auto c = *mnemonic;
+			auto c = *fullMnemonic;
 			if (c == ' ')
 			{
 				if ((meta.baseMnemonic.size() > 0) && (meta.outputs.size() > 0))
@@ -211,7 +212,7 @@ namespace CpuMetadata
 				pToken->push_back(c);
 			}
 
-			++mnemonic;
+			++fullMnemonic;
 		}
 
 		//if ((meta.outputs.size() > 0) && (meta.inputs.size() == 0))
