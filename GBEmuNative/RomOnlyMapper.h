@@ -45,6 +45,8 @@ public:
 		return false;
 	}
 
+	virtual Uint8 GetActiveBank() { return 0; }
+
 private:
 	std::shared_ptr<Rom> m_pRom;
 

@@ -1,3 +1,4 @@
+#include "Analyzer.cpp"
 #include "Emulator.cpp"
 #include "GameBoy.cpp"
 #include "MemoryBus.cpp"

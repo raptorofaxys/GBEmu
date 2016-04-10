@@ -61,6 +61,10 @@ public:
 			{
 				result += *p;
 			}
+			else
+			{
+				break;
+			}
 			++p;
 		}
 

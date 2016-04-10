@@ -28,11 +28,28 @@ namespace TraceLog
 	inline void Flush()
 	{
 		FILE* pFile;
-		fopen_s(&pFile, TRACELOG_FILENAME, "a");
-		if (pFile)
+		auto succeeded = false;
+		auto delay = 10;
+		for (auto i = 0; i < 10; ++i)
 		{
-			fwrite(s_traceLog.data(), s_traceLog.length(), 1, pFile);
-			fclose(pFile);
+			fopen_s(&pFile, TRACELOG_FILENAME, "a");
+			if (pFile)
+			{
+				fwrite(s_traceLog.data(), s_traceLog.length(), 1, pFile);
+				fclose(pFile);
+				succeeded = true;
+				break;
+			}
+			else
+			{
+				SDL_Delay(delay);
+				delay = (delay * 4 / 3);
+			}
+		}
+		
+		if (!succeeded)
+		{
+			throw Exception("Failed to flush trace log, will be missing instructions");
 		}
 		s_traceLog.clear();
 	}

@@ -28,6 +28,8 @@ public:
 		m_romRam2Bits = 0;
 	}
 
+	virtual Uint8 GetActiveBank() { return GetEffectiveRomBankIndex(); }
+
 	static const int kRomFixedBankBase = 0x0000;
 	static const int kRomFixedBankSize = 0x4000;
 	static const int kRomSwitchedBankBase = 0x4000;

@@ -14,6 +14,8 @@
 #include "RomOnlyMapper.h"
 #include "Mbc1Mapper.h"
 
+#include "Analyzer.h"
+
 class GameBoy
 {
 public:
@@ -21,6 +23,13 @@ public:
 	{
 		Running,
 		SingleStepping
+	};
+	
+	enum class TracingState
+	{
+		Disabled,
+		SingleSteppingOnly,
+		Enabled
 	};
 
 	GameBoy(const char* pFileName, SDL_Renderer* pRenderer)
@@ -62,9 +71,11 @@ public:
 		m_pMemoryBus->AddDevice(m_pUnknownMemoryMappedRegisters);
 		m_pMemoryBus->LockDevices();
 
-		TraceLog::SetEnabled(true);
-		TraceLog::Reset();
-		TraceLog::Log(Format("\n\nNew run on %s\n\n", m_pRom->GetRomName().c_str()));
+		m_tracingState = TracingState::SingleSteppingOnly;
+
+		m_pAnalyzer.reset(new Analyzer(m_pMapper.get(), m_pCpu.get(), m_pMemoryBus.get()));
+		SetAnalyzerTracingState();
+		m_pAnalyzer->OnStart(m_pRom->GetRomName().c_str());
 
 		Reset();
 	}
@@ -139,6 +150,16 @@ public:
 		DebugBreak();
 	}
 
+	void SetAnalyzerTracingState()
+	{
+		switch (m_tracingState)
+		{
+		case TracingState::Enabled: m_pAnalyzer->SetTracingEnabled(true); break;
+		case TracingState::SingleSteppingOnly: m_pAnalyzer->SetTracingEnabled(m_debuggerState == DebuggerState::SingleStepping); break;
+		case TracingState::Disabled: m_pAnalyzer->SetTracingEnabled(false); break;
+		}
+	}
+
 	void Update(float seconds)
 	{
 		if (m_debuggerState == DebuggerState::SingleStepping)
@@ -163,13 +184,12 @@ public:
 					s_stopOnNextInstruction = false;
 				}
 
-				TraceLog::SetEnabled(m_debuggerState == DebuggerState::SingleStepping);
-				//TraceLog::SetEnabled(true);
-				m_pCpu->DebugNextOpcode();
+				SetAnalyzerTracingState();
+				m_pAnalyzer->OnPreExecuteOpcode();
 
 				if (m_debuggerState == DebuggerState::SingleStepping)
 				{
-					TraceLog::Flush();
+					m_pAnalyzer->FlushTrace();
 				}
 				
 				m_lastUpdateAddress = m_pCpu->GetPC();
@@ -200,6 +220,7 @@ private:
 	static bool s_stopOnNextInstruction;
 	
 	// @TODO: possibly refactor into some kind of system component collection?
+	std::shared_ptr<Analyzer> m_pAnalyzer;
 	std::shared_ptr<Rom> m_pRom;
 	std::shared_ptr<MemoryMapper> m_pMapper;
 	std::shared_ptr<MemoryBus> m_pMemoryBus;
@@ -215,6 +236,7 @@ private:
 	float m_totalCyclesExecuted;
 	float m_cyclesRemaining;
 	DebuggerState m_debuggerState;
+	TracingState m_tracingState;
 	Sint32 m_breakpointAddress;
 	Sint32 m_lastUpdateAddress;
 };

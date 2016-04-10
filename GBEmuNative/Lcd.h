@@ -508,18 +508,20 @@ public:
 	{
 		if (ServiceMemoryRangeRequest(requestType, address, value, kVramBase, kVramSize, m_vram))
 		{
-			if (TraceLog::IsEnabled())
-			{
-				TraceLog::Log(Format("LCD: VRAM access: %s at 0x%04lX, value 0x%02X\n", requestType == MemoryRequestType::Read ? "read" : "write", address, value));
-			}
+			GetAnalyzer()->OnVramAccess(requestType, address, value);
+			//if (TraceLog::IsEnabled())
+			//{
+			//	TraceLog::Log(Format("LCD: VRAM access: %s at 0x%04lX, value 0x%02X\n", requestType == MemoryRequestType::Read ? "read" : "write", address, value));
+			//}
 			return true;
 		}
 		else if (ServiceMemoryRangeRequest(requestType, address, value, kOamBase, kOamSize, m_oam))
 		{
-			if (TraceLog::IsEnabled())
-			{
-				TraceLog::Log(Format("LCD: OAM access: %s at 0x%04lX, value 0x%02X\n", requestType == MemoryRequestType::Read ? "read" : "write", address, value));
-			}
+			GetAnalyzer()->OnOamAccess(requestType, address, value);
+			//if (TraceLog::IsEnabled())
+			//{
+			//	TraceLog::Log(Format("LCD: OAM access: %s at 0x%04lX, value 0x%02X\n", requestType == MemoryRequestType::Read ? "read" : "write", address, value));
+			//}
 			return true;
 		}
 		else
