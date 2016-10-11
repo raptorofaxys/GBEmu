@@ -103,10 +103,33 @@ public:
 		return success;
 	}
 
+	Uint8 SafeRead8(Uint16 address)
+	{
+		bool success = true;
+		return Read8(address, false, &success);
+	}
+
 	Uint16 Read16(Uint16 address)
 	{
 		// Must handle as two reads, because the address can cross range boundaries
 		return Make16(Read8(address + 1), Read8(address));
+	}
+
+	bool SafeRead16(Uint16 address, Uint16& value)
+	{
+		auto low = Uint8(0);
+		auto successLow = SafeRead8(address, low);
+		auto high = Uint8(0);
+		auto successHigh = SafeRead8(address + 1, low);
+		value = Make16(Read8(address + 1), Read8(address));
+		return successLow && successHigh;
+	}
+
+	Uint16 SafeRead16(Uint16 address)
+	{
+		Uint16 value = 0;
+		SafeRead16(address, value);
+		return value;
 	}
 
 	void Write8(Uint16 address, Uint8 value)

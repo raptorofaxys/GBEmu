@@ -20,12 +20,55 @@
 
 // Some ideas about disassembly:
 // -perform code flow analysis to track function entry and return points
-// -perform data flow analysis to identify function input parameters
+// -perform data flow analysis to identify function input parameters, function output parameters (analyze use of registers after function return; beware of interrupt calls)
 // -track number of reads and writes per call within a function to guess about a function being a form of memory copy
 // -track use of registers and device access
 //   -hmmm if non-CPU devices wind up reading/writing to memory bus other than the DMA controller, we'll need to isolate CPU accesses from other device accesses
 // -user-assigned memory cell names
 // -user-assigned function names or generated "best guess" names based on function behaviour
+
+#define ENUMERATE_DEVICES() \
+	ENUMERATE_DEVICE(Timer, DIV) \
+	ENUMERATE_DEVICE(Timer, TIMA) \
+	ENUMERATE_DEVICE(Timer, TMA) \
+	ENUMERATE_DEVICE(Timer, TAC) \
+	ENUMERATE_DEVICE(Joypad, P1_JOYP) \
+	ENUMERATE_DEVICE(GameLinkPort, SB) \
+	ENUMERATE_DEVICE(GameLinkPort, SC) \
+	ENUMERATE_DEVICE(Lcd, LCDC) \
+	ENUMERATE_DEVICE(Lcd, STAT) \
+	ENUMERATE_DEVICE(Lcd, SCY) \
+	ENUMERATE_DEVICE(Lcd, SCX) \
+	ENUMERATE_DEVICE(Lcd, LY) \
+	ENUMERATE_DEVICE(Lcd, LYC) \
+	ENUMERATE_DEVICE(Lcd, DMA) \
+	ENUMERATE_DEVICE(Lcd, BGP) \
+	ENUMERATE_DEVICE(Lcd, OBP0) \
+	ENUMERATE_DEVICE(Lcd, OBP1) \
+	ENUMERATE_DEVICE(Lcd, WY) \
+	ENUMERATE_DEVICE(Lcd, WX) \
+	ENUMERATE_DEVICE(Sound, NR10) \
+	ENUMERATE_DEVICE(Sound, NR11) \
+	ENUMERATE_DEVICE(Sound, NR12) \
+	ENUMERATE_DEVICE(Sound, NR13) \
+	ENUMERATE_DEVICE(Sound, NR14) \
+	ENUMERATE_DEVICE(Sound, NR21) \
+	ENUMERATE_DEVICE(Sound, NR22) \
+	ENUMERATE_DEVICE(Sound, NR23) \
+	ENUMERATE_DEVICE(Sound, NR24) \
+	ENUMERATE_DEVICE(Sound, NR30) \
+	ENUMERATE_DEVICE(Sound, NR31) \
+	ENUMERATE_DEVICE(Sound, NR32) \
+	ENUMERATE_DEVICE(Sound, NR33) \
+	ENUMERATE_DEVICE(Sound, NR34) \
+	ENUMERATE_DEVICE(Sound, NR41) \
+	ENUMERATE_DEVICE(Sound, NR42) \
+	ENUMERATE_DEVICE(Sound, NR43) \
+	ENUMERATE_DEVICE(Sound, NR44) \
+	ENUMERATE_DEVICE(Sound, NR50) \
+	ENUMERATE_DEVICE(Sound, NR51) \
+	ENUMERATE_DEVICE(Sound, NR52)
+
 
 Analyzer::Analyzer(MemoryMapper* pMemoryMapper, Cpu* pCpu, MemoryBus* pMemory)
 {
@@ -35,18 +78,47 @@ Analyzer::Analyzer(MemoryMapper* pMemoryMapper, Cpu* pCpu, MemoryBus* pMemory)
 	EnsureGlobalFunctionIsOnStack();
 }
 
-std::string Analyzer::DebugStringPeek8(Uint16 address)
+std::string Format8(Uint8 value)
 {
-	Uint8 value = 0;
-	bool success = m_pMemory->SafeRead8(address, value);
-	char szBuffer[32];
-	_snprintf_s(szBuffer, ARRAY_SIZE(szBuffer), "%02lX", value);
-	return success ? szBuffer : "??";
+	return Format("%02lX", value);
 }
 
-std::string Analyzer::DebugStringPeek16(Uint16 address)
+std::string Format16(Uint16 value)
 {
-	return DebugStringPeek8(address + 1).append(DebugStringPeek8(address));
+	return Format("%04lX", value);
+}
+
+std::string Format8(Uint8 value, bool success)
+{
+	return success ? Format8(value) : "??";
+}
+
+std::string Format16(Uint16 value, bool success)
+{
+	return success ? Format16(value) : "????";
+}
+
+void Analyzer::ParseOperand8(Uint16 address, Uint8& op8, std::string& debugString8, bool& success)
+{
+	success = m_pMemory->SafeRead8(address, op8);
+	debugString8 = Format8(op8, success);
+}
+
+void Analyzer::ParseOperand16(Uint16 address, Uint16& op16, std::string& debugString16, bool& success)
+{
+	success = m_pMemory->SafeRead16(address, op16);
+	debugString16 = Format16(op16, success);
+}
+
+std::string Analyzer::GetAddressAnnotation(Uint16 address)
+{
+	switch (address)
+	{
+#define ENUMERATE_DEVICE(device, reg) case device::Registers::reg: return std::string(#reg); break;
+		ENUMERATE_DEVICES()
+#undef ENUMERATE_DEVICE
+	}
+	return "";
 }
 
 void Analyzer::DebugNextOpcode()
@@ -55,30 +127,45 @@ void Analyzer::DebugNextOpcode()
 	{
 		DisableMemoryTrackingForScope dmtfs(*this);
 
-		const auto& meta = CpuMetadata::GetOpcodeMetadata(m_pMemory->Read8(m_pCpu->GetPC()), m_pMemory->Read8(m_pCpu->GetPC() + 1));
+		//@OPTIMIZE: lots of duplicate accesses to memory around the PC for ease of formatting and parsing. This could be streamlined.
+		auto pc = m_pCpu->GetPC();
+
+		const auto& meta = CpuMetadata::GetOpcodeMetadata(m_pMemory->SafeRead8(pc), m_pMemory->SafeRead8(pc + 1));
 		std::string mnemonic = meta.fullMnemonic;
+
+		auto op8 = Uint8(0);
+		auto op8str = std::string();
+		bool op8success = false;
+		ParseOperand8(pc + 1, op8, op8str, op8success);
+		
+		auto op16 = Uint16(0);
+		auto op16str = std::string();
+		bool op16success = false;
+		ParseOperand16(pc + 1, op16, op16str, op16success);
 
 		// Do some "smart" replacements to improve legibility for many opcodes
 		if (meta.baseMnemonic == "LDH")
 		{
-			mnemonic = Replace(mnemonic, "(n)", Format("(FF%sh)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str()));
+			auto address = Make16(0xFF, op8);
+			auto annotation = op8success ? GetAddressAnnotation(address): std::string("");
+			auto addressStr = Format16(address, op8success);
+			auto substitutionString = (annotation.length() > 0)
+				? Format("(%s) (%sh)", annotation.c_str(), addressStr.c_str())
+				: Format("(%sh)", addressStr.c_str());
+			mnemonic = Replace(mnemonic, "(n)", substitutionString);
 		}
 		else if (meta.baseMnemonic == "JR")
 		{
-			mnemonic = Replace(mnemonic, "n", Format("%sh (%04lX)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str(), m_pCpu->GetPC() + 2 + static_cast<Sint8>(m_pMemory->Read8(m_pCpu->GetPC() + 1))));
+			mnemonic = Replace(mnemonic, "n", Format("%sh (%sh)", op8str.c_str(), Format16(pc + 2 + static_cast<Sint8>(op8), op8success).c_str()));
 		}
 		else //if (meta.size == 3)
 		{
-			mnemonic = Replace(mnemonic, "(nn)", Format("(%sh)", DebugStringPeek16(m_pCpu->GetPC() + 1).c_str()));
-			mnemonic = Replace(mnemonic, "nn", Format("%sh", DebugStringPeek16(m_pCpu->GetPC() + 1).c_str()));
-			mnemonic = Replace(mnemonic, "(n)", Format("(%sh)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str()));
-			mnemonic = Replace(mnemonic, "n", Format("%sh", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str()));
+			//@TOOD: possibly replace the format strings for the mnemonic table with clearer substitution tokens
+			//mnemonic = Replace(mnemonic, "(nn)", Format("(%sh)", op16str)); //@TODO: useless until we print target value, this is covered by the next line
+			mnemonic = Replace(mnemonic, "nn", Format("%sh", op16str.c_str()));
+			//mnemonic = Replace(mnemonic, "(n)", Format("(%sh)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str())); // all (n) are LDH
+			mnemonic = Replace(mnemonic, "n", Format("%sh", op8str.c_str()));
 		}
-		//else if (meta.size == 2)
-		//{
-		//	mnemonic = Replace(mnemonic, "(n)", Format("(n==%sh)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str()));
-		//	mnemonic = Replace(mnemonic, "n", Format("n==%sh", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str()));
-		//}
 
 		//TraceLog::Log(Format("-----\n0x%04lX  %02lX   %s  \n", m_pCpu->GetPC(), opcode, pMnemonic));
 		//TraceLog::Log(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
@@ -93,7 +180,7 @@ void Analyzer::DebugNextOpcode()
 		////printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(m_pCpu->GetPC() + 1)));
 		//TraceLog::Log(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
 		// Format partly inspired from VisualBoyAdvance and then bastardized...
-		TraceLog::Log(Format("CPU %08d: [%04x] %-16s AF=%02X%02X BC=%02X%02X DE=%02X%02X HL=%02X%02X SP=%04X %c%c%c%c LY=%d %c%c\n",
+		TraceLog::Log(Format("CPU %08d: [%04X] %-24s AF=%02X%02X BC=%02X%02X DE=%02X%02X HL=%02X%02X SP=%04X %c%c%c%c LY=%d %c%c\n",
 			m_pCpu->GetTotalExecutedOpcodes(),
 			m_pCpu->GetPC(),
 			mnemonic.c_str(),
@@ -110,9 +197,11 @@ void Analyzer::DebugNextOpcode()
 			m_pCpu->GetFlagValue(FlagBitIndex::Subtract) ? 'S' : 's',
 			m_pCpu->GetFlagValue(FlagBitIndex::HalfCarry) ? 'H' : 'h',
 			m_pCpu->GetFlagValue(FlagBitIndex::Carry) ? 'C' : 'c',
-			m_pMemory->Read8(static_cast<Uint16>(Lcd::Registers::LY)),
+			m_pMemory->SafeRead8(static_cast<Uint16>(Lcd::Registers::LY)),
 			((m_pCpu->GetIF() & Bit1) != 0) ? 'V' : 'v',
 			m_pCpu->GetIME() ? 'I' : 'i'));
+		
+		//@TODO: add traced opcode to function?
 	}
 }
 
@@ -143,13 +232,14 @@ void Analyzer::OnPreExecuteOpcode()
 void Analyzer::OnPreCall(Uint16 unmappedAddress)
 {
 	auto ma = GetMappedAddress(unmappedAddress);
-	GetFunction(ma);
+	//GetFunction(ma);
 	PushFunction(ma);
 }
 
 void Analyzer::OnPreCallInterrupt(Uint16 unmappedAddress)
 {
 	auto ma = GetMappedAddress(unmappedAddress);
+	//GetFunction(ma);
 	PushFunction(ma);
 	GetTopFunction().isInterruptServiceRoutine = true;
 }
@@ -168,48 +258,7 @@ void Analyzer::OnPostReturn()
 	//auto ma = GetMappedPC();
 }
 
-#define TRACK_DEVICE_USAGE(device, reg) if (address == static_cast<Uint16>(device::Registers::reg)) { func.uses##device = true; }
-#define TRACK_DEVICES() \
-	TRACK_DEVICE_USAGE(Timer, DIV) \
-	TRACK_DEVICE_USAGE(Timer, TIMA) \
-	TRACK_DEVICE_USAGE(Timer, TMA) \
-	TRACK_DEVICE_USAGE(Timer, TAC) \
-	TRACK_DEVICE_USAGE(Joypad, P1_JOYP) \
-	TRACK_DEVICE_USAGE(GameLinkPort, SB) \
-	TRACK_DEVICE_USAGE(GameLinkPort, SC) \
-	TRACK_DEVICE_USAGE(Lcd, LCDC) \
-	TRACK_DEVICE_USAGE(Lcd, STAT) \
-	TRACK_DEVICE_USAGE(Lcd, SCY) \
-	TRACK_DEVICE_USAGE(Lcd, SCX) \
-	TRACK_DEVICE_USAGE(Lcd, LY) \
-	TRACK_DEVICE_USAGE(Lcd, LYC) \
-	TRACK_DEVICE_USAGE(Lcd, DMA) \
-	TRACK_DEVICE_USAGE(Lcd, BGP) \
-	TRACK_DEVICE_USAGE(Lcd, OBP0) \
-	TRACK_DEVICE_USAGE(Lcd, OBP1) \
-	TRACK_DEVICE_USAGE(Lcd, WY) \
-	TRACK_DEVICE_USAGE(Lcd, WX) \
-	TRACK_DEVICE_USAGE(Sound, NR10) \
-	TRACK_DEVICE_USAGE(Sound, NR11) \
-	TRACK_DEVICE_USAGE(Sound, NR12) \
-	TRACK_DEVICE_USAGE(Sound, NR13) \
-	TRACK_DEVICE_USAGE(Sound, NR14) \
-	TRACK_DEVICE_USAGE(Sound, NR21) \
-	TRACK_DEVICE_USAGE(Sound, NR22) \
-	TRACK_DEVICE_USAGE(Sound, NR23) \
-	TRACK_DEVICE_USAGE(Sound, NR24) \
-	TRACK_DEVICE_USAGE(Sound, NR30) \
-	TRACK_DEVICE_USAGE(Sound, NR31) \
-	TRACK_DEVICE_USAGE(Sound, NR32) \
-	TRACK_DEVICE_USAGE(Sound, NR33) \
-	TRACK_DEVICE_USAGE(Sound, NR34) \
-	TRACK_DEVICE_USAGE(Sound, NR41) \
-	TRACK_DEVICE_USAGE(Sound, NR42) \
-	TRACK_DEVICE_USAGE(Sound, NR43) \
-	TRACK_DEVICE_USAGE(Sound, NR44) \
-	TRACK_DEVICE_USAGE(Sound, NR50) \
-	TRACK_DEVICE_USAGE(Sound, NR51) \
-	TRACK_DEVICE_USAGE(Sound, NR52)
+#define ENUMERATE_DEVICE(device, reg) case device::Registers::reg: func.uses##device = true; break;
 
 void Analyzer::OnPostRead8(Uint16 address, Uint8 value)
 {
@@ -220,7 +269,10 @@ void Analyzer::OnPostRead8(Uint16 address, Uint8 value)
 
 	auto& func = GetTopFunction();
 	++func.readCount;
-	TRACK_DEVICES();
+	switch (address)
+	{
+		ENUMERATE_DEVICES()
+	}
 	if (IsAddressInRange(address, Memory::kHramMemoryBase, Memory::kHramMemorySize))
 	{
 		func.usesHighRam = true;
@@ -236,13 +288,16 @@ void Analyzer::OnPostWrite8(Uint16 address, Uint8 value)
 
 	auto& func = GetTopFunction();
 	++func.writeCount;
-	TRACK_DEVICES();
+	switch (address)
+	{
+		ENUMERATE_DEVICES()
+	}
 	if (IsAddressInRange(address, Memory::kHramMemoryBase, Memory::kHramMemorySize))
 	{
 		func.usesHighRam = true;
 	}
 }
-#undef TRACK_DEVICE_USAGE
+#undef ENUMERATE_DEVICE
 
 void Analyzer::OnPostVramAccess(MemoryRequestType requestType, Uint16 address, Uint8 value)
 {
@@ -293,7 +348,7 @@ void Analyzer::PopFunction()
 {
 	m_functionStack.pop();
 
-	// Failsafe
+	// Failsafe - some games do weird stack manipulation...
 	if (m_functionStack.size() == 0)
 	{
 		EnsureGlobalFunctionIsOnStack();

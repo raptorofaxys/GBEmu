@@ -79,8 +79,9 @@ private:
 	using AnalyzedFunctionMap = std::map<Analyzer::MappedAddress, Analyzer::AnalyzedFunction>;
 	using AnalyzedFunctionStack = std::stack<Analyzer::MappedAddress>;
 
-	std::string DebugStringPeek8(Uint16 address);
-	std::string DebugStringPeek16(Uint16 address);
+	void ParseOperand8(Uint16 address, Uint8& op8, std::string& debugString8, bool& success);
+	void ParseOperand16(Uint16 address, Uint16& op16, std::string& debugString16, bool& success);
+	std::string GetAddressAnnotation(Uint16 address);
 	void DebugNextOpcode();
 
 	MappedAddress GetMappedAddress(Uint16 unmappedAddress);
