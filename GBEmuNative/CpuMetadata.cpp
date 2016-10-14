@@ -1,5 +1,7 @@
 #include "CpuMetadata.h"
 
+#include "Utils.h"
+
 #include <string>
 #include <vector>
 #include <array>
@@ -27,8 +29,8 @@ namespace CpuMetadata
 			"ADD A,B", "ADD A,C", "ADD A,D", "ADD A,E", "ADD A,H", "ADD A,L", "ADD A,(HL)", "ADD A,A", "ADC A,B", "ADC A,C", "ADC A,D", "ADC A,E", "ADC A,H", "ADC A,L", "ADC A,(HL)", "ADC A,A",
 			"SUB A,B", "SUB A,C", "SUB A,D", "SUB A,E", "SUB A,H", "SUB A,L", "SUB A,(HL)", "SUB A,A", "SBC A,B", "SBC A,C", "SBC A,D", "SBC A,E", "SBC A,H", "SBC A,L", "SBC A,(HL)", "SBC A,A",
 			"AND B", "AND C", "AND D", "AND E", "AND H", "AND L", "AND (HL)", "AND A", "XOR B", "XOR C", "XOR D", "XOR E", "XOR H", "XOR L", "XOR (HL)", "XOR A",
-			"OR B", "OR C", "OR D", "OR E", "OR H", "OR L", "OR (HL)", "OR A", "CP B [F;A,B]", "CP C", "CP D", "CP E", "CP H", "CP L", "CP (HL)", "CP A",
-			"RET NZ", "POP BC", "JP NZ,nn", "JP nn", "CALL NZ,nn", "PUSH BC", "ADD A,n", "RST 0", "RET Z", "RET", "JP Z,nn", "Ext ops", "CALL Z,nn", "CALL nn", "ADC A,n", "RST 8",
+			"OR B", "OR C", "OR D", "OR E", "OR H", "OR L", "OR (HL)", "OR A", "CP B", "CP C", "CP D", "CP E", "CP H", "CP L", "CP (HL)", "CP A",
+			"RET NZ", "POP BC", "JP NZ,nn", "JP nn", "CALL NZ,nn", "PUSH BC", "ADD A,n", "RST 0", "RET Z", "RET", "JP Z,nn", "EXT", "CALL Z,nn", "CALL nn", "ADC A,n", "RST 8",
 			"RET NC", "POP DE", "JP NC,nn", "XX", "CALL NC,nn", "PUSH DE", "SUB A,n", "RST 10", "RET C", "RETI", "JP C,nn", "XX", "CALL C,nn", "XX", "SBC A,n", "RST 18",
 			"LDH (n),A", "POP HL", "LDH (C),A", "XX", "XX", "PUSH HL", "AND n", "RST 20", "ADD SP,n", "JP (HL)", "LD (nn),A", "XX", "XX", "XX", "XOR n", "RST 28",
 			"LDH A,(n)", "POP AF", "LDH A,(C)", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,n", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
@@ -60,6 +62,13 @@ namespace CpuMetadata
 		};
 
 		return extOpsMnemonics[opcode];
+	}
+
+	template <typename FuncType>
+	static void ForAllOpcodes(const FuncType& func)
+	{
+		for (auto op : s_opcodeMetadata) func(op);
+		for (auto op : s_extendedOpcodeMetadata) func(op);
 	}
 
 	//int GetOpcodeSize(Uint8 opcode)
@@ -131,6 +140,7 @@ namespace CpuMetadata
 		{
 			parseOperand(output);
 		}
+
 		return size;
 	}
 
@@ -177,7 +187,7 @@ namespace CpuMetadata
 	//	}
 	//}
 
-	bool IsExtendedOpcode(Uint8 opcode)
+	bool IsExtensionOpcode(Uint8 opcode)
 	{
 		return opcode == 0xCB;
 	}
@@ -228,18 +238,19 @@ namespace CpuMetadata
 		}
 	}
 
-	void ComputeTracingData()
+	void ComputeMetadata()
 	{
-		// First, parse what we can from the static opcode metadata
-		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
+		for (Uint16 opcode16 = 0; opcode16 <= 0xFF; ++opcode16)
 		{
 			Uint8 opcode = static_cast<Uint8>(opcode16);
-			if (IsExtendedOpcode(opcode))
-			{
-				continue;
-			}
+			//if (IsExtensionOpcode(opcode))
+			//{
+			//	continue;
+			//}
 
 			auto& meta = s_opcodeMetadata[opcode];
+			meta.opcode = opcode;
+			meta.isExtendedOpcode = false;
 			ParseMnemonic(GetOpcodeMnemonic(opcode), meta);
 			meta.size = GetOpcodeSize(opcode);
 			//if (meta.size != GetComputedOpcodeSize(opcode))
@@ -248,11 +259,12 @@ namespace CpuMetadata
 			//}
 		}
 
-		for (Uint16 opcode16 = 0; opcode16 < 0xFF; ++opcode16)
+		for (Uint16 opcode16 = 0; opcode16 <= 0xFF; ++opcode16)
 		{
 			Uint8 opcode = static_cast<Uint8>(opcode16);
-
 			auto& meta = s_extendedOpcodeMetadata[opcode];
+			meta.opcode = opcode;
+			meta.isExtendedOpcode = true;
 			ParseMnemonic(GetExtendedOpcodeMnemonic(opcode), meta);
 			meta.size = GetExtendedOpcodeSize(opcode);
 			//if (meta.size != GetComputedExtendedOpcodeSize(opcode))
@@ -260,19 +272,25 @@ namespace CpuMetadata
 			//	SDL_assert(false && "Miscomputed opcode size");
 			//}
 		}
+
+		ForAllOpcodes(
+			[](const OpcodeMetadata& op)
+		{
+			DebugPrint("%d (%d): %s\n", op.opcode, op.isExtendedOpcode, op.baseMnemonic.c_str());
+		});
 	}
 
 	struct Initializer
 	{
 		Initializer()
 		{
-			ComputeTracingData();
+			ComputeMetadata();
 		}
 	};
 	Initializer g_initializer;
 
 	const OpcodeMetadata & GetOpcodeMetadata(Uint8 byte1, Uint8 byte2)
 	{
-		return CpuMetadata::IsExtendedOpcode(byte1) ? s_extendedOpcodeMetadata[byte2] : s_opcodeMetadata[byte1];
+		return CpuMetadata::IsExtensionOpcode(byte1) ? s_extendedOpcodeMetadata[byte2] : s_opcodeMetadata[byte1];
 	}
 }

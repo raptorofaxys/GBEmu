@@ -15,6 +15,9 @@ namespace CpuMetadata
 		{
 		}
 
+		Uint8 opcode; // Will be the byte after the CB for extended opcodes
+		bool isExtendedOpcode;
+
 		std::string fullMnemonic;
 		std::string baseMnemonic;
 		std::vector<std::string> inputs;
