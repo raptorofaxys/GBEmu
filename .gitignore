@@ -233,4 +233,5 @@ FakesAssemblies/
 *.exe
 *.out
 *.app
-workingdir/*.*
+workingdir/
+docs/
