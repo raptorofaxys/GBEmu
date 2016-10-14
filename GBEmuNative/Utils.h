@@ -57,7 +57,7 @@ inline int64_t GetMilliseconds()
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
 std::shared_ptr<std::vector<Uint8>> LoadFileAsByteArray(const char* pFileName);
 
-inline std::string Replace(const std::string& str, const std::string& substring, const std::string& replacement)
+inline std::string ReplaceAll(const std::string& str, const std::string& substring, const std::string& replacement)
 {
 	// Quite inefficient in terms of allocations
 	auto result = str;
@@ -72,7 +72,21 @@ inline std::string Replace(const std::string& str, const std::string& substring,
 
 		result.replace(pos, substringLength, replacement);
 	}
-	
+
+	return result;
+}
+
+inline std::string ReplaceFirst(const std::string& str, const std::string& substring, const std::string& replacement)
+{
+	// Quite inefficient in terms of allocations
+	auto result = str;
+	auto substringLength = substring.length();
+	auto pos = result.find(substring);
+	if (pos != std::string::npos)
+	{
+		result.replace(pos, substringLength, replacement);
+	}
+
 	return result;
 }
 
