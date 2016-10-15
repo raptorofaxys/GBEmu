@@ -201,21 +201,27 @@ namespace CpuMetadata
 			auto c = *fullMnemonic;
 			if (c == ' ')
 			{
-				if ((meta.baseMnemonic.size() > 0) && (meta.outputs.size() > 0))
+				SDL_assert((meta.baseMnemonic.length() > 0) && "Unexpected spaces before token");
+
+				if (meta.HasDirectOutput())
 				{
 					SDL_assert(false && "Unexpected opcode argument");
 					break;
 				}
 
 				// New output
-				meta.outputs.push_back(std::string());
-				pToken = &meta.outputs.back();
+				pToken = &meta.directOutput;
 			}
 			else if (c == ',')
 			{
+				if (meta.HasDirectInput())
+				{
+					SDL_assert(false && "Unexpected opcode argument");
+					break;
+				}
+				
 				// New input
-				meta.inputs.push_back(std::string());
-				pToken = &meta.inputs.back();
+				pToken = &meta.directInput;
 			}
 			else
 			{
@@ -223,6 +229,16 @@ namespace CpuMetadata
 			}
 
 			++fullMnemonic;
+		}
+
+		if (meta.HasDirectInput())
+		{
+			meta.inputs.push_back(meta.directInput);
+		}
+
+		if (meta.HasDirectOutput())
+		{
+			meta.outputs.push_back(meta.directOutput);
 		}
 
 		// Process special cases
@@ -272,7 +288,11 @@ namespace CpuMetadata
 		ForAllOpcodes(
 			[](const OpcodeMetadata& op)
 		{
-			DebugPrint("%d (%d): %s\n", op.opcode, op.isExtendedOpcode, op.baseMnemonic.c_str());
+			DebugPrint("%3d (%d): %s\n", op.opcode, op.isExtendedOpcode, op.fullMnemonic.c_str());
+			DebugPrint("         %s", op.baseMnemonic.c_str());
+			if (op.HasDirectOutput()) DebugPrint(" %s", op.directOutput.c_str());
+			if (op.HasDirectInput()) DebugPrint(",%s", op.directInput.c_str());
+			DebugPrint("\n");
 		});
 	}
 
