@@ -20,8 +20,12 @@ namespace CpuMetadata
 
 		std::string fullMnemonic;
 		std::string baseMnemonic;
+		// Direct inputs and outputs are the operands specified to the opcode by the programmer. There can be at most one of each.
+		// For example, in LDI (HL),A - (HL) is the output and A is the input.
 		std::string directInput;
 		std::string directOutput;
+		// Inputs and outputs should (eventually) reflect everything that's read and written by an instruction. For example,
+		// in LDI(HL),A - (HL) is the output, but so is HL since it is incremented; HL and A are inputs. (Flags may eventually be added to this information.)
 		std::vector<std::string> inputs;
 		std::vector<std::string> outputs;
 		// Uint8 cycles; // this is conditional
