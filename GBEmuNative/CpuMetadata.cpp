@@ -203,7 +203,7 @@ namespace CpuMetadata
 			{
 				if ((meta.baseMnemonic.size() > 0) && (meta.outputs.size() > 0))
 				{
-					// Already parsed an output, about to get to bracket processing; ignore the rest
+					SDL_assert(false && "Unexpected opcode argument");
 					break;
 				}
 
@@ -225,13 +225,9 @@ namespace CpuMetadata
 			++fullMnemonic;
 		}
 
-		//if ((meta.outputs.size() > 0) && (meta.inputs.size() == 0))
-		//{
-		//	// If only one output and no input, for the moment, assume the input is the same as the output
-		//	meta.inputs.push_back(meta.outputs.back());
-		//}
-
 		// Process special cases
+		// @TODO: many special cases here. Many instructions have implicit operands (e.g. A in the CP instructions, inout semantics for LDI/LDH, etc.)
+		// We need to see how far we want/can go with analysis here.
 		if (meta.baseMnemonic == "XX")
 		{
 			meta.illegal = true;
