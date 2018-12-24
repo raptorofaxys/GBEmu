@@ -62,10 +62,10 @@ int main(int argc, char **argv)
 
 		bool done = false;
 
-		auto lastMilliseconds = GetMilliseconds();
+		auto lastMicroseconds = GetMicroseconds();
 		
 		float averageSeconds = -1.0f;
-		auto lastPrintMilliseconds = static_cast<int64_t>(0);
+		auto lastPrintMicroseconds = static_cast<int64_t>(0);
 
 		while (!done)
 		{
@@ -103,22 +103,22 @@ int main(int argc, char **argv)
 		    }
 
 			// Time- and FPS-tracking logic
-			auto milliseconds = GetMilliseconds();
+			auto microseconds = GetMicroseconds();
 
-			auto elapsedMilliseconds = milliseconds - lastMilliseconds;
-			auto seconds = elapsedMilliseconds / 1000.0f;
-			lastMilliseconds = milliseconds;
+			auto elapsedMicroseconds = microseconds - lastMicroseconds;
+			auto seconds = elapsedMicroseconds / 1000000.0f;
+			lastMicroseconds = microseconds;
 
 			static float maxTimeStep = 0.1f;
 			seconds = SDL_min(seconds, maxTimeStep);
 
-			static float averagingRate = 0.5f;
+			static float averagingRate = 0.3f;
 			averageSeconds = (averageSeconds > 0.0f) ? (averageSeconds * (1.0f - averagingRate) + (seconds * averagingRate)) : seconds;
-			if (milliseconds - lastPrintMilliseconds > 1000)
+			if (microseconds - lastPrintMicroseconds > 200000)
 			{
 				SDL_SetWindowTitle(pWindow.get(), Format("%s - %3.1f FPS", gameName.c_str(), 1.0f / averageSeconds).c_str());
 				//printf("%3.1f FPS\n", 1.0f / averageSeconds);
-				lastPrintMilliseconds = milliseconds;
+				lastPrintMicroseconds = microseconds;
 			}
 
 			gb.Update(seconds);
