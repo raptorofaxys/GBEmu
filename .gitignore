@@ -235,3 +235,8 @@ FakesAssemblies/
 *.app
 workingdir/
 docs/
+
+.vs/
+*.vc.db
+
+*.args.json
