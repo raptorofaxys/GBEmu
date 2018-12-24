@@ -379,84 +379,96 @@ public:
 					}
 				}
 
-				if (LCDC & Bit1)
-				{
-					// Sprites are active
+                if (LCDC & Bit1)
+                {
+                    // Sprites are active
+                    bool sprites8x16 = ((LCDC & Bit2) != 0);
 
-					bool sprites8x16 = ((LCDC & Bit2) != 0);
+                    Sint16 bestBaseX;
+                    int bestIndex = -1;
+                    Uint8 bestLuminosity;
+                    Uint8 bestAttributes;
 
-					Sint16 bestBaseX;
-					int bestIndex = -1;
-					Uint8 bestLuminosity;
-					Uint8 bestAttributes;
+                    // Find the best sprite hit for this pixel
+                    for (int spriteIndex = 0; spriteIndex < 40; ++spriteIndex)
+                    {
+                        Uint16 spriteBaseAddress = 0xFE00 + spriteIndex * 4;
+                        Sint16 spriteBaseX = ReadOam(spriteBaseAddress + 1) - 8;
+                        Sint16 spriteBaseY = ReadOam(spriteBaseAddress + 0) - 16;
 
-					// Find the best sprite hit for this pixel
-					for (int spriteIndex = 0; spriteIndex < 40; ++spriteIndex)
-					{
-						Uint16 spriteBaseAddress = 0xFE00 + spriteIndex * 4;
-						Sint16 spriteBaseX = ReadOam(spriteBaseAddress + 1) - 8;
-						Sint16 spriteBaseY = ReadOam(spriteBaseAddress + 0) - 16;
+                        Sint16 x = screenX - spriteBaseX;
 
-						Sint16 x = screenX - spriteBaseX;
-						Sint16 y = m_scanLine - spriteBaseY;
+                        Sint16 y = m_scanLine - spriteBaseY;
 
-						Uint8 tileIndex = ReadOam(spriteBaseAddress + 2);
-						Uint8 attributes = ReadOam(spriteBaseAddress + 3);
+                        if ((x < 0) || (x >= 8))
+                        {
+                            continue;
+                        }
 
-						bool verticalFlip = ((attributes & Bit6) != 0);
+                        if (y >= 16)
+                        {
+                            continue;
+                        }
 
-						if (sprites8x16)
-						{
-							if (y >= 8)
-							{
-								y -= 8;
-								
-								if (!verticalFlip)
-								{
-									tileIndex |= 1;
-								}
-								else
-								{
-									tileIndex &= ~1;
-								}
-							}
-							else
-							{
-								if (!verticalFlip)
-								{
-									tileIndex &= ~1;
-								}
-								else
-								{
-									tileIndex |= 1;
-								}
-							}
-						}
+                        Uint8 tileIndex = ReadOam(spriteBaseAddress + 2);
+                        Uint8 attributes = ReadOam(spriteBaseAddress + 3);
 
-						// Horizontal flip
+                        bool verticalFlip = ((attributes & Bit6) != 0);
+
+                        if (sprites8x16)
+                        {
+                            if (y >= 8)
+                            {
+                                y -= 8;
+
+                                if (!verticalFlip)
+                                {
+                                    tileIndex |= 1;
+                                }
+                                else
+                                {
+                                    tileIndex &= ~1;
+                                }
+                            }
+                            else
+                            {
+                                if (!verticalFlip)
+                                {
+                                    tileIndex &= ~1;
+                                }
+                                else
+                                {
+                                    tileIndex |= 1;
+                                }
+                            }
+                        }
+
+                        if ((y < 0) || (y >= 8))
+                        {
+                            continue;
+                        }
+
+                        // Horizontal flip
 						if (attributes & Bit5)
 						{
 							x = 7 - x;
 						}
 
-						// Vertical flip
+                        // Vertical flip
 						if (verticalFlip)
 						{
 							y = 7 - y;
 						}
-
-						auto colorIndex = GetTileDataPixelColorIndex(0x8000, tileIndex, x, y);
 						
-						Uint8 palette = ((attributes & Bit4) != 0) ? OBP1 : OBP0;
-						auto spriteLuminosity = GetLuminosityForColorIndex(palette, colorIndex);
-
-						if ((colorIndex != 0) && (x >= 0) && (x < 8) && (y >= 0) && (y < 8))
+                        auto colorIndex = GetTileDataPixelColorIndex(0x8000, tileIndex, x, y);
+                        if (colorIndex != 0)
 						{
 							if ((bestIndex < 0) || (spriteBaseX < bestBaseX))
 							{
 								bestBaseX = spriteBaseX;
 								bestIndex = spriteIndex;
-								bestLuminosity = spriteLuminosity;
+                                Uint8 palette = ((attributes & Bit4) != 0) ? OBP1 : OBP0;
+                                bestLuminosity = GetLuminosityForColorIndex(palette, colorIndex);;
 								bestAttributes = attributes;
 							}
 						}
