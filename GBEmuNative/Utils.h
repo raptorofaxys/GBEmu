@@ -50,8 +50,14 @@ inline bool IsAddressInRange(Uint16 address, Uint16 base, Uint16 rangeSize)
 
 inline int64_t GetMilliseconds()
 {
-	return std::chrono::duration_cast<std::chrono::milliseconds>
-		(std::chrono::system_clock::now().time_since_epoch()).count();
+    return std::chrono::duration_cast<std::chrono::milliseconds>
+        (std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+inline int64_t GetMicroseconds()
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 void LoadFileAsByteArray(std::vector<Uint8>& output, const char* pFileName);
