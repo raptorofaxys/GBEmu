@@ -12,7 +12,7 @@ class MemoryMapper;
 class Cpu;
 class MemoryBus;
 
-#define ENABLE_ANALYZER 1
+#define ENABLE_ANALYZER 0
 
 #if ENABLE_ANALYZER
 #define ELIDE_IF_ANALYZER_DISABLED ;
