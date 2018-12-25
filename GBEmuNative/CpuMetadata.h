@@ -32,8 +32,8 @@ namespace CpuMetadata
 		Uint8 size;
 		bool illegal;
 
-		bool HasDirectInput() const { return directInput.length() > 0; }
-		bool HasDirectOutput() const { return directOutput.length() > 0; }
+		bool HasDirectInput() const { return !directInput.empty(); }
+		bool HasDirectOutput() const { return !directOutput.empty(); }
 	};
 
 	const OpcodeMetadata& GetOpcodeMetadata(Uint8 byte1, Uint8 byte2);
