@@ -19,9 +19,9 @@ namespace CpuMetadata
 		static const char* opcodeMnemonics[256] =
 		{
 			"NOP", "LD BC,nn", "LD (BC),A", "INC BC", "INC B", "DEC B", "LD B,n", "RLC A", "LD (nn),SP", "ADD HL,BC", "LD A,(BC)", "DEC BC", "INC C", "DEC C", "LD C,n", "RRC A",
-			"STOP", "LD DE,nn", "LD (DE),A", "INC DE", "INC D", "DEC D", "LD D,n", "RL A", "JR n", "ADD HL,DE", "LD A,(DE)", "DEC DE", "INC E", "DEC E", "LD E,n", "RR A",
-			"JR NZ,n", "LD HL,nn", "LDI (HL),A", "INC HL", "INC H", "DEC H", "LD H,n", "DAA", "JR Z,n", "ADD HL,HL", "LDI A,(HL)", "DEC HL", "INC L", "DEC L", "LD L,n", "CPL",
-			"JR NC,n", "LD SP,nn", "LDD (HL),A", "INC SP", "INC (HL)", "DEC (HL)", "LD (HL),n", "SCF", "JR C,n", "ADD HL,SP", "LDD A,(HL)", "DEC SP", "INC A", "DEC A", "LD A,n", "CCF",
+			"STOP", "LD DE,nn", "LD (DE),A", "INC DE", "INC D", "DEC D", "LD D,n", "RL A", "JR n_rel", "ADD HL,DE", "LD A,(DE)", "DEC DE", "INC E", "DEC E", "LD E,n", "RR A",
+			"JR NZ,n_rel", "LD HL,nn", "LDI (HL),A", "INC HL", "INC H", "DEC H", "LD H,n", "DAA", "JR Z,n_rel", "ADD HL,HL", "LDI A,(HL)", "DEC HL", "INC L", "DEC L", "LD L,n", "CPL",
+			"JR NC,n_rel", "LD SP,nn", "LDD (HL),A", "INC SP", "INC (HL)", "DEC (HL)", "LD (HL),n", "SCF", "JR C,n_rel", "ADD HL,SP", "LDD A,(HL)", "DEC SP", "INC A", "DEC A", "LD A,n", "CCF",
 			"LD B,B", "LD B,C", "LD B,D", "LD B,E", "LD B,H", "LD B,L", "LD B,(HL)", "LD B,A", "LD C,B", "LD C,C", "LD C,D", "LD C,E", "LD C,H", "LD C,L", "LD C,(HL)", "LD C,A",
 			"LD D,B", "LD D,C", "LD D,D", "LD D,E", "LD D,H", "LD D,L", "LD D,(HL)", "LD D,A", "LD E,B", "LD E,C", "LD E,D", "LD E,E", "LD E,H", "LD E,L", "LD E,(HL)", "LD E,A",
 			"LD H,B", "LD H,C", "LD H,D", "LD H,E", "LD H,H", "LD H,L", "LD H,(HL)", "LD H,A", "LD L,B", "LD L,C", "LD L,D", "LD L,E", "LD L,H", "LD L,L", "LD L,(HL)", "LD L,A",
@@ -32,8 +32,8 @@ namespace CpuMetadata
 			"OR B", "OR C", "OR D", "OR E", "OR H", "OR L", "OR (HL)", "OR A", "CP B", "CP C", "CP D", "CP E", "CP H", "CP L", "CP (HL)", "CP A",
 			"RET NZ", "POP BC", "JP NZ,nn", "JP nn", "CALL NZ,nn", "PUSH BC", "ADD A,n", "RST 0", "RET Z", "RET", "JP Z,nn", "EXT", "CALL Z,nn", "CALL nn", "ADC A,n", "RST 8",
 			"RET NC", "POP DE", "JP NC,nn", "XX", "CALL NC,nn", "PUSH DE", "SUB A,n", "RST 10", "RET C", "RETI", "JP C,nn", "XX", "CALL C,nn", "XX", "SBC A,n", "RST 18",
-			"LDH (n),A", "POP HL", "LDH (C),A", "XX", "XX", "PUSH HL", "AND n", "RST 20", "ADD SP,n", "JP (HL)", "LD (nn),A", "XX", "XX", "XX", "XOR n", "RST 28",
-			"LDH A,(n)", "POP AF", "LDH A,(C)", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,n", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
+			"LDH (n_high),A", "POP HL", "LDH (hC),A", "XX", "XX", "PUSH HL", "AND n", "RST 20", "ADD SP,n", "JP (HL)", "LD (nn),A", "XX", "XX", "XX", "XOR n", "RST 28",
+			"LDH A,(n_high)", "POP AF", "LDH A,(hC)", "DI", "XX", "PUSH AF", "OR n", "RST 30", "LDHL SP,n", "LD SP,HL", "LD A,(nn)", "EI", "XX", "XX", "CP n", "RST 38",
 		};
 
 		return opcodeMnemonics[opcode];
@@ -194,6 +194,7 @@ namespace CpuMetadata
 
 	void ParseMnemonic(const char* fullMnemonic, OpcodeMetadata& meta)
 	{
+        SDL_assert(false && "fixme: single-operand instructions like CP A use a single input operand, INC HL have a single inout operand, etc.");
 		meta.fullMnemonic = fullMnemonic;
 		std::string* pToken = &meta.baseMnemonic;
 		while (*fullMnemonic)

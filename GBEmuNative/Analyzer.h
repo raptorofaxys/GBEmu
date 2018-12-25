@@ -7,6 +7,7 @@
 #include <map>
 #include <stack>
 #include <set>
+#include <unordered_map>
 
 class MemoryMapper;
 class Cpu;
@@ -83,6 +84,12 @@ private:
 	using AnalyzedFunctionMap = std::map<Analyzer::MappedAddress, Analyzer::AnalyzedFunction>;
 	using AnalyzedFunctionStack = std::stack<Analyzer::MappedAddress>;
 
+	//using OperandFormatFunc = void(int);
+	//std::unordered_map<std::string, OperandFormatFunc> m_operandFormatters;
+	void Annotate_n(std::string& operandString, std::string& comment);
+	void Annotate_nn(std::string& operandString, std::string& comment);
+	void Annotate_ind_nn(std::string& operandString, std::string& comment);
+
 	void ParseOperand8(Uint16 address, Uint8& op8, std::string& debugString8, bool& success);
 	void ParseOperand16(Uint16 address, Uint16& op16, std::string& debugString16, bool& success);
 	std::string GetAddressAnnotation(Uint16 address);
@@ -97,6 +104,8 @@ private:
 	AnalyzedFunction& GetTopFunctionFromStack(); //equivalent to GetTopFunction but slow
 	AnalyzedFunction& GetFunction(MappedAddress address);
 	void EnsureGlobalFunctionIsOnStack();
+
+	std::unordered_map<std::string, void(Analyzer::*)(std::string&, std::string&)> m_operandFormatters;
 
 	MemoryMapper* m_pMemoryMapper;
 	Cpu* m_pCpu;

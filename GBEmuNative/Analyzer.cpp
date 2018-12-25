@@ -17,6 +17,7 @@
 #include "TraceLog.h"
 
 #include <map>
+#include <unordered_map>
 
 // Some ideas about disassembly:
 // -perform code flow analysis to track function entry and return points
@@ -69,9 +70,36 @@
 	ENUMERATE_DEVICE(Sound, NR51) \
 	ENUMERATE_DEVICE(Sound, NR52)
 
+//namespace
+//{
+//	auto OperandFormatFuncDummy = [](const std::string& operand, const Analyzer& analyzer, const Cpu& cpu, std::string& annotation, std::string& comment) {};
+//	using OperandFormatFunc = decltype(OperandFormatFuncDummy);
+//	static std::unordered_map<std::string, OperandFormatFunc> s_operandFormatters;
+//	//static std::unordered_map<std::string, decltype([](const std::string& operand, const Cpu& cpu) {})> s_operandFormatters;
+//
+//	struct Initializer
+//	{
+//		Initializer()
+//		{
+//			s_operandFormatters["n"] = [](const std::string& operand, const Analyzer& analyzer, const Cpu& cpu, std::string& annotation, std::string& comment) { analyzer.m_pCpu; };
+//			// Figure this out. Either:
+//			// -use member functions on the Analyzer
+//			// -use non-member lambdas and add accessors on the Analyzer for its state
+//
+//			// If the operand is indirect and the address is invalid, this needs to be apparent
+//			// If the operand is an immediate address, we can annotate it directly and move the immediate to the comment
+//			// IF the operand is a register indirect address, leave it as is but annotate in the comment if possible
+//		}
+//	};
+//	Initializer g_initializer;
+//}
 
 Analyzer::Analyzer(MemoryMapper* pMemoryMapper, Cpu* pCpu, MemoryBus* pMemory)
 {
+	m_operandFormatters["n"] = &Analyzer::Annotate_n;
+	m_operandFormatters["nn"] = &Analyzer::Annotate_nn;
+	m_operandFormatters["(nn)"] = &Analyzer::Annotate_ind_nn;
+
 	m_pMemoryMapper = pMemoryMapper;
 	m_pCpu = pCpu;
 	m_pMemory = pMemory;
@@ -80,22 +108,58 @@ Analyzer::Analyzer(MemoryMapper* pMemoryMapper, Cpu* pCpu, MemoryBus* pMemory)
 
 std::string Format8(Uint8 value)
 {
-	return Format("%02lX", value);
+	return Format("%02lXh", value);
 }
 
 std::string Format16(Uint16 value)
 {
-	return Format("%04lX", value);
+	return Format("%04lXh", value);
 }
 
 std::string Format8(Uint8 value, bool success)
 {
-	return success ? Format8(value) : "??";
+	return success ? Format8(value) : "??h";
 }
 
 std::string Format16(Uint16 value, bool success)
 {
-	return success ? Format16(value) : "????";
+	return success ? Format16(value) : "????h";
+}
+
+void Analyzer::Annotate_n(std::string& operandString, std::string& comment)
+{
+	auto op8 = Uint8(0);
+	auto op8str = std::string();
+	bool op8success = false;
+	ParseOperand8(m_pCpu->GetPC() + 1, op8, op8str, op8success);
+	operandString = op8str;
+}
+
+void Analyzer::Annotate_nn(std::string& operandString, std::string& comment)
+{
+	auto op16 = Uint16(0);
+	auto op16str = std::string();
+	bool op16success = false;
+	ParseOperand16(m_pCpu->GetPC() + 1, op16, op16str, op16success);
+	operandString = op16str;
+}
+
+void Analyzer::Annotate_ind_nn(std::string& operandString, std::string& comment)
+{
+	auto op16 = Uint16(0);
+	auto op16str = std::string();
+	bool op16success = false;
+	ParseOperand16(m_pCpu->GetPC() + 1, op16, op16str, op16success);
+	operandString = Format("(%s)", op16str.c_str());
+	if (op16success)
+	{
+		auto annotation = GetAddressAnnotation(op16);
+		if (!annotation.empty())
+		{
+			comment = operandString;
+			operandString = Format("(%s)", annotation);
+		}
+	}
 }
 
 void Analyzer::ParseOperand8(Uint16 address, Uint8& op8, std::string& debugString8, bool& success)
@@ -133,39 +197,104 @@ void Analyzer::DebugNextOpcode()
 		const auto& meta = CpuMetadata::GetOpcodeMetadata(m_pMemory->SafeRead8(pc), m_pMemory->SafeRead8(pc + 1));
 		std::string mnemonic = meta.fullMnemonic;
 
-		auto op8 = Uint8(0);
-		auto op8str = std::string();
-		bool op8success = false;
-		ParseOperand8(pc + 1, op8, op8str, op8success);
-		
-		auto op16 = Uint16(0);
-		auto op16str = std::string();
-		bool op16success = false;
-		ParseOperand16(pc + 1, op16, op16str, op16success);
+		//auto op8 = Uint8(0);
+		//auto op8str = std::string();
+		//bool op8success = false;
+		//ParseOperand8(pc + 1, op8, op8str, op8success);
 
-		// Do some "smart" replacements to improve legibility for many opcodes
-		if (meta.baseMnemonic == "LDH")
+		//auto op16 = Uint16(0);
+		//auto op16str = std::string();
+		//bool op16success = false;
+		//ParseOperand16(pc + 1, op16, op16str, op16success);
+
+		//auto inputComment = std::string();
+		//auto outputComment = std::string();
+
+		//auto OperandFormatFuncDummy =
+		//	[this, &meta, op8, &op8str, &op8success, op16, &op16str, &op16success]
+		//	(std::string& annotation, std::string& comment) {};
+		//using OperandFormatFunc = decltype(OperandFormatFuncDummy);
+		//static std::unordered_map<std::string, OperandFormatFunc> s_operandFormatters;
+		//struct OperandFormatFuncsInitializer
+		//{
+		//	Initializer()
+		//	{
+		//		s_operandFormatters["n"] = [](const std::string& operand, const Analyzer& analyzer, const Cpu& cpu, std::string& annotation, std::string& comment) { analyzer.m_pCpu; };
+		//		// If the operand is indirect and the address is invalid, this needs to be apparent
+		//		// If the operand is an immediate address, we can annotate it directly and move the immediate to the comment
+		//		// IF the operand is a register indirect address, leave it as is but annotate in the comment if possible
+		//	}
+		//};
+		//Initializer g_initializer;
+
+		auto formatOperand = [this](std::string& operand, std::string& comment)
 		{
-			auto address = Make16(0xFF, op8);
-			auto annotation = op8success ? GetAddressAnnotation(address): std::string("");
-			auto addressStr = Format16(address, op8success);
-			auto substitutionString = (annotation.length() > 0)
-				? Format("(%s) (%sh)", annotation.c_str(), addressStr.c_str())
-				: Format("(%sh)", addressStr.c_str());
-			mnemonic = Replace(mnemonic, "(n)", substitutionString);
-		}
-		else if (meta.baseMnemonic == "JR")
+			auto formatIt = m_operandFormatters.find(operand);
+			if (formatIt != m_operandFormatters.end())
+			{
+				((this)->*(formatIt->second))(operand, comment);
+			}
+		};
+
+		std::string directOutputOperand = meta.directOutput;
+		std::string directOutputComment;
+		if (meta.HasDirectOutput())
 		{
-			mnemonic = Replace(mnemonic, "n", Format("%sh (%sh)", op8str.c_str(), Format16(pc + 2 + static_cast<Sint8>(op8), op8success).c_str()));
+			formatOperand(directOutputOperand, directOutputComment);
 		}
-		else //if (meta.size == 3)
+
+		std::string directInputOperand = meta.directInput;
+		std::string directInputComment;
+		if (meta.HasDirectInput())
 		{
-			//@TOOD: possibly replace the format strings for the mnemonic table with clearer substitution tokens
-			//mnemonic = Replace(mnemonic, "(nn)", Format("(%sh)", op16str)); //@TODO: useless until we print target value, this is covered by the next line
-			mnemonic = Replace(mnemonic, "nn", Format("%sh", op16str.c_str()));
-			//mnemonic = Replace(mnemonic, "(n)", Format("(%sh)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str())); // all (n) are LDH
-			mnemonic = Replace(mnemonic, "n", Format("%sh", op8str.c_str()));
+			formatOperand(directInputOperand, directInputComment);
 		}
+
+		std::string finalComment = directOutputComment;
+		if (!directInputComment.empty())
+		{
+			if (!finalComment.empty())
+			{
+				finalComment += " / ";
+			}
+			finalComment += directInputComment;
+		}
+
+		//// Do some "smart" replacements to improve legibility for many opcodes
+		//if (meta.baseMnemonic == "LDH")
+		//{
+		//	auto address = Make16(0xFF, op8);
+		//	auto annotation = op8success ? GetAddressAnnotation(address) : std::string("");
+		//	auto addressStr = Format16(address, op8success);
+		//	auto substitutionString = Format("(%sh)", addressStr.c_str());
+		//	if (annotation.length() > 0)
+		//	{
+		//		// If we have an annotation, use that instead
+		//		comment = substitutionString;
+		//		substitutionString = Format("(%s)", annotation.c_str());
+		//	}
+		//	mnemonic = ReplaceFirst(mnemonic, "(n)", substitutionString);
+		//}
+		//else if (meta.baseMnemonic == "JR")
+		//{
+		//	mnemonic = ReplaceFirst(mnemonic, "n", Format("%sh", op8str.c_str()));
+		//	comment = Format("(%sh)", Format16(pc + 2 + static_cast<Sint8>(op8), op8success).c_str());
+		//}
+
+		//if ((meta.baseMnemonic == "JR") || (meta.baseMnemonic == "JP") || (meta.baseMnemonic == "CALL"))
+		//{
+		//	// Add information about flag state
+		//	//mnemonic = ReplaceFirst(mnemonic, " Z", m_pCpu->GetFlagValue(FlagBitIndex::Zero) ? " Z" : " z");
+		//	//mnemonic = ReplaceFirst(mnemonic, " NZ", !m_pCpu->GetFlagValue(FlagBitIndex::Zero) ? " NZ" : " nz");
+		//	//mnemonic = ReplaceFirst(mnemonic, " C", m_pCpu->GetFlagValue(FlagBitIndex::Carry) ? " C" : " C");
+		//	//mnemonic = ReplaceFirst(mnemonic, " NC", !m_pCpu->GetFlagValue(FlagBitIndex::Carry) ? " NC" : " nc");
+		//}
+
+		//@TOOD: possibly replace the format strings for the mnemonic table with clearer substitution tokens
+		//mnemonic = Replace(mnemonic, "(nn)", Format("(%sh)", op16str)); //@TODO: useless until we print target value, this is covered by the next line
+		//mnemonic = ReplaceFirst(mnemonic, "nn", Format("%sh", op16str.c_str()));
+		////mnemonic = Replace(mnemonic, "(n)", Format("(%sh)", DebugStringPeek8(m_pCpu->GetPC() + 1).c_str())); // all (n) are LDH
+		//mnemonic = ReplaceFirst(mnemonic, "n", Format("%sh", op8str.c_str()));
 
 		//TraceLog::Log(Format("-----\n0x%04lX  %02lX   %s  \n", m_pCpu->GetPC(), opcode, pMnemonic));
 		//TraceLog::Log(Format("A: 0x%02lX F: %s%s%s%s B: 0x%02lX C: 0x%02lX D: 0x%02lX E: 0x%02lX H: 0x%02lX L: 0x%02lX\n",
@@ -180,10 +309,11 @@ void Analyzer::DebugNextOpcode()
 		////printf("(BC): 0x%s (DE): 0x%s (HL): 0x%s (nn): 0x%s\n", DebugStringPeek8(BC), DebugStringPeek8(DE), DebugStringPeek8(HL), DebugStringPeek16(Peek16(m_pCpu->GetPC() + 1)));
 		//TraceLog::Log(Format("(BC): 0x%s (DE): 0x%s (HL): 0x%s\n", DebugStringPeek8(BC).c_str(), DebugStringPeek8(DE).c_str(), DebugStringPeek8(HL).c_str()));
 		// Format partly inspired from VisualBoyAdvance and then bastardized...
-		TraceLog::Log(Format("CPU %08d: [%04X] %-24s AF=%02X%02X BC=%02X%02X DE=%02X%02X HL=%02X%02X SP=%04X %c%c%c%c LY=%d %c%c\n",
+		TraceLog::Log(Format("CPU %08d: [%04X] %-16s %-10s AF=%02X%02X BC=%02X%02X DE=%02X%02X HL=%02X%02X SP=%04X %c%c%c%c LY=%d %c%c\n",
 			m_pCpu->GetTotalExecutedOpcodes(),
 			m_pCpu->GetPC(),
 			mnemonic.c_str(),
+			finalComment.length() > 0 ? Format("; %s", finalComment.c_str()).c_str() : "",
 			m_pCpu->GetA(),
 			m_pCpu->GetF(),
 			m_pCpu->GetB(),
