@@ -49,7 +49,7 @@ int main(int argc, char **argv)
 			throw Exception("Couldn't create window");
 		}
 		
-		std::shared_ptr<SDL_Renderer> pRenderer(SDL_CreateRenderer(pWindow.get(), -1, SDL_RENDERER_PRESENTVSYNC), SDL_DestroyRenderer);
+		std::shared_ptr<SDL_Renderer> pRenderer(SDL_CreateRenderer(pWindow.get(), -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC), SDL_DestroyRenderer);
 		if (!pRenderer)
 		{
 			throw Exception("Couldn't create renderer");
