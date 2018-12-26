@@ -66,6 +66,7 @@ int main(int argc, char **argv)
 		
 		float averageSeconds = -1.0f;
 		auto lastPrintMicroseconds = static_cast<int64_t>(0);
+		auto paused = false;
 
 		while (!done)
 		{
@@ -92,6 +93,9 @@ int main(int argc, char **argv)
 							break;
 						case SDLK_n:
 							gb.BreakAtNextInstruction();
+							break;
+						case SDLK_p:
+							paused = !paused;
 							break;
 						}
 					}
@@ -121,7 +125,10 @@ int main(int argc, char **argv)
 				lastPrintMicroseconds = microseconds;
 			}
 
-			gb.Update(seconds);
+			if (!paused)
+			{
+				gb.Update(seconds);
+			}
 
 		    SDL_RenderClear(pRenderer.get());
 		    SDL_RenderCopy(pRenderer.get(), gb.GetFrontFrameBufferTexture(), NULL, NULL);

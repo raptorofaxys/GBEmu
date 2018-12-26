@@ -92,8 +92,8 @@ public:
 			if ((P1_JOYP & Bit5) == 0)
 			{
 				// Buttons
-				SetBitValue(P1_JOYP, 0, pKeyState[SDL_SCANCODE_P] == 0); // A: P
-				SetBitValue(P1_JOYP, 1, pKeyState[SDL_SCANCODE_O] == 0); // B: O
+				SetBitValue(P1_JOYP, 0, pKeyState[SDL_SCANCODE_E] == 0); // A: P
+				SetBitValue(P1_JOYP, 1, pKeyState[SDL_SCANCODE_R] == 0); // B: O
 				SetBitValue(P1_JOYP, 2, pKeyState[SDL_SCANCODE_Q] == 0); // Select: Q
 				SetBitValue(P1_JOYP, 3, pKeyState[SDL_SCANCODE_W] == 0); // Start: W
 
