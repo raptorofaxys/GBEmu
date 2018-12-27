@@ -781,7 +781,9 @@ public:
 					Sint16 ch3Value = m_ch3LengthCounter.GetGatedSample(m_ch3Generator.GetOutput());
 					Sint16 ch4Value = m_ch4LengthCounter.GetGatedSample(m_ch4VolumeEnvelope.GetAttenuatedSample(m_ch4Generator.GetOutput()));
 
-					// Sine wave test
+                    // Sine wave test. As of Dec 2018, all known sound glitches are caused by an insufficient feed rate (as
+                    // evidenced by this simple sine wave test), which is caused by enforcing vsync.
+                    // If we eventually make the vsync wait asynchronous, we should service the sound device while waiting.
 					//static float f = 0.0f;
 					//f += m_sampleTimeStep;
 					//ch1Value = sinf(f * 220.0f * 2 * 3.14f) * 4000.0f;
