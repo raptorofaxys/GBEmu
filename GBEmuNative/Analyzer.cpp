@@ -223,10 +223,34 @@ void Analyzer::OnStart(const char * pRomName)
 	m_trackMemoryAccesses = true;
 }
 
+void Analyzer::OnHalt()
+{
+    if (TraceLog::IsEnabled())
+    {
+        TraceLog::Log("(HALT executed, CPU halted)\n");
+    }
+}
+
+void Analyzer::OnHaltResumed(Uint8 IF)
+{
+    if (TraceLog::IsEnabled())
+    {
+        TraceLog::Log(Format("(resuming after HALT - IF %d)\n", IF));
+    }
+}
+
 void Analyzer::OnPreExecuteOpcode()
 {
 	DebugNextOpcode();
 	++GetTopFunction().executedInstructionCount;
+}
+
+void Analyzer::OnOpcodeExecutionSkipped()
+{
+    if (TraceLog::IsEnabled())
+    {
+        //TraceLog::Log(Format("(CPU halted, will not execute opcode at 0x%02lX)\n", m_pCpu->GetPC()));
+    }
 }
 
 void Analyzer::OnPreCall(Uint16 unmappedAddress)
@@ -242,6 +266,11 @@ void Analyzer::OnPreCallInterrupt(Uint16 unmappedAddress)
 	//GetFunction(ma);
 	PushFunction(ma);
 	GetTopFunction().isInterruptServiceRoutine = true;
+
+    if (TraceLog::IsEnabled())
+    {
+        TraceLog::Log(Format("(interrupt 0x%04lX pending - CPU unhalted)\n", unmappedAddress));
+    }
 }
 
 void Analyzer::OnPreReturn(Uint16 returnStatementAddress)

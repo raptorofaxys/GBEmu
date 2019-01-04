@@ -187,7 +187,6 @@ public:
 				}
 
 				SetAnalyzerTracingState();
-				m_pAnalyzer->OnPreExecuteOpcode();
 
 				if (m_debuggerState == DebuggerState::SingleStepping)
 				{

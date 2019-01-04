@@ -30,7 +30,11 @@ public:
 
 	void OnStart(const char* pRomName) ELIDE_IF_ANALYZER_DISABLED
 
-	void OnPreExecuteOpcode() ELIDE_IF_ANALYZER_DISABLED
+    void OnPreExecuteOpcode() ELIDE_IF_ANALYZER_DISABLED
+    void OnOpcodeExecutionSkipped() ELIDE_IF_ANALYZER_DISABLED
+
+    void OnHalt() ELIDE_IF_ANALYZER_DISABLED
+    void OnHaltResumed(Uint8 IF) ELIDE_IF_ANALYZER_DISABLED
 
 	void OnPreCall(Uint16 unmappedAddress) ELIDE_IF_ANALYZER_DISABLED
 	void OnPreCallInterrupt(Uint16 unmappedAddress) ELIDE_IF_ANALYZER_DISABLED

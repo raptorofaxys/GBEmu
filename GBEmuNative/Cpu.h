@@ -113,52 +113,70 @@ public:
 
 	Sint32 ExecuteSingleInstruction()
 	{
-		Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
+        if (m_cpuHalted && IsEnabledInterruptPendingIgnoreIME())
+        {
+            GetAnalyzer()->OnHaltResumed(IF);
+            m_cpuHalted = false;
+            return 4;
+        }
 
-		if (!m_cpuHalted && !m_cpuStopped)
+        if (m_cpuStopped && IF)
+        {
+            m_cpuStopped = false;
+            //@TODO: handle this properly
+        }
+
+        // Check for interrupts in order of priority
+        if (IME)
+        {
+            auto isInterruptPending = IsEnabledInterruptPendingIgnoreIME();
+            auto wasInterruptPending = true;
+
+            const int INTERRUPT_SERVICE_CYCLES = 20;
+            if (CallInterruptVectorIfRequired(Bit0, 0x40))
+            {
+                // VBlank interrupt
+            }
+            else if (CallInterruptVectorIfRequired(Bit1, 0x48))
+            {
+                // LCD STAT
+            }
+            else if (CallInterruptVectorIfRequired(Bit2, 0x50))
+            {
+                // Timer
+            }
+            else if (CallInterruptVectorIfRequired(Bit3, 0x58))
+            {
+                // Serial
+            }
+            else if (CallInterruptVectorIfRequired(Bit4, 0x60))
+            {
+                // Joypad
+            }
+            else
+            {
+                wasInterruptPending = false;
+            }
+
+            SDL_assert(isInterruptPending == wasInterruptPending);
+            if (isInterruptPending)
+            {
+                return 20;
+            }
+        }
+
+        Sint32 instructionCycles = -1; // number of clock cycles used by the opcode
+        if (!m_cpuHalted && !m_cpuStopped)
 		{
-			instructionCycles = DoExecuteSingleInstruction();
+            GetAnalyzer()->OnPreExecuteOpcode();
+            instructionCycles = DoExecuteSingleInstruction();
 		}
 		else
 		{
-			// Simply wait until something interesting occurs, depending on the CPU state
+            GetAnalyzer()->OnOpcodeExecutionSkipped();
+            // Simply wait until something interesting occurs, depending on the CPU state
 			//@TODO: handle STOP properly (mode switch, wake on input?)
 			instructionCycles = 4;
-		}
-
-		// Check for interrupts
-		if (IME)
-		{
-			if (CallInterruptVectorIfRequired(Bit0, 0x40))
-			{
-				// VBlank interrupt
-			}
-			else if (CallInterruptVectorIfRequired(Bit1, 0x48))
-			{
-				// LCD STAT
-			}
-			else if (CallInterruptVectorIfRequired(Bit2, 0x50))
-			{
-				// Timer
-			}
-			else if (CallInterruptVectorIfRequired(Bit3, 0x58))
-			{
-				// Serial
-			}
-			else if (CallInterruptVectorIfRequired(Bit4, 0x60))
-			{
-				// Joypad
-			}
-		}
-
-		if (m_cpuHalted && IF)
-		{
-			m_cpuHalted = false;
-		}
-
-		if (m_cpuStopped && IF)
-		{
-			m_cpuStopped = false;
 		}
 
 		SDL_assert(instructionCycles != -1);
@@ -639,6 +657,7 @@ private:
 	
 	template <int N> void HALT_7__6()
 	{
+        GetAnalyzer()->OnHalt();
 		m_cpuHalted = true;
 	}
 
@@ -1787,11 +1806,17 @@ private:
 	// Interrupts
 	///////////////////////////////////////////////////////////////////////////
 
+    bool IsEnabledInterruptPendingIgnoreIME()
+    {
+        // Filter out bits that can be set by the CPU but that do not actually correspond to a hardware interrupt
+        return IF & IE & 0x1F;
+    }
+
 	bool CallInterruptVectorIfRequired(Uint8 bit, Uint8 vector)
 	{
 		if (IF & IE & bit)
 		{
-			IF &= ~bit;
+            IF &= ~bit;
 			CallI(vector);
 			return true;
 		}
