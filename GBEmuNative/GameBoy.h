@@ -54,8 +54,8 @@ public:
 		m_pMemory.reset(new Memory());
 		m_pCpu.reset(new Cpu(m_pMemoryBus));
 		m_pTimer.reset(new Timer(m_pMemoryBus, m_pCpu));
-		m_pJoypad.reset(new Joypad(m_pMemoryBus, m_pCpu));
 		m_pGameLinkPort.reset(new GameLinkPort());
+		m_pJoypad.reset(new Joypad(m_pCpu));
 		m_pLcd.reset(new Lcd(m_pMemoryBus, m_pCpu, pRenderer));
 		m_pSound.reset(new Sound());
 		m_pUnknownMemoryMappedRegisters.reset(new UnknownMemoryMappedRegisters());
@@ -209,6 +209,7 @@ public:
 				m_pJoypad->Update(timeSpentOnInstruction);
 				m_pLcd->Update(timeSpentOnInstruction);
 				m_pSound->Update(timeSpentOnInstruction);
+                m_pGameLinkPort->Update(timeSpentOnInstruction);
 			}
 			else
 			{

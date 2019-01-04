@@ -13,8 +13,9 @@ public:
 		SC = 0xFF02,	// Serial transfer control
 	};
 
-	GameLinkPort()
+	GameLinkPort(const std::shared_ptr<Cpu>& cpu)
 	{
+        m_pCpu = cpu;
 		Reset();
 	}
 
@@ -22,7 +23,26 @@ public:
 	{
 		SB = 0;
 		SC = 0;
+        m_updateTimeLeft = 0.0f;
+        m_pendingOutboundTransfer = false;
 	}
+
+    void Update(float seconds)
+    {
+        m_updateTimeLeft += seconds;
+        if (m_pendingOutboundTransfer)
+        {
+            if (m_updateTimeLeft >= 8.0f / 8192)
+            {
+                m_pendingOutboundTransfer = false;
+                m_pCpu->SignalInterrupt(Bit3);
+            }
+        }
+        else
+        {
+            m_updateTimeLeft = 0.0f;
+        }
+    }
 
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
 	{
@@ -38,7 +58,7 @@ public:
 				{
 					SC = value;
 					
-					//@TODO: timing emulation, internal/external clock
+					//@TODO: timing emulation, internal/external clock, interrupt
 					if (value & Bit7)
 					{
 						//printf("Serial output byte: %c (0x%02lX)\n", m_SB, m_SB);
@@ -46,6 +66,8 @@ public:
 						SC &= ~Bit7;
 						// Read zeroes
 						SB = 0;
+                        
+                        m_pendingOutboundTransfer = true;
 					}
 				}
 				return true;
@@ -59,4 +81,9 @@ public:
 private:
 	Uint8 SB;
 	Uint8 SC;
+    
+    float m_updateTimeLeft;
+    bool m_pendingOutboundTransfer;
+
+    std::shared_ptr<Cpu> m_pCpu;
 };
