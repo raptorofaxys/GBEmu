@@ -13,15 +13,14 @@ public:
 		P1_JOYP = 0xFF00, // Joypad
 	};
 
-	Joypad(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu)
-		: m_pMemory(memory)
-		, m_pCpu(cpu)
+	Joypad(const std::shared_ptr<Cpu>& cpu)
+		: m_pCpu(cpu)
 	{
 		Reset();
 
 		auto numJoysticks = SDL_NumJoysticks();
 
-		// Search for the specific knockoff  USB NES pad I own, because it's awesome
+		// Search for the specific knockoff USB NES pad I own, because it's awesome
 		for (int i = 0; i < SDL_NumJoysticks(); ++i)
 		{
 			std::shared_ptr<SDL_Joystick> pJoystick(SDL_JoystickOpen(i), SDL_JoystickClose);
@@ -197,6 +196,5 @@ private:
 	Uint8 m_lastP1_JOYP;
 	std::shared_ptr<SDL_Joystick> m_pJoystick;
 
-	std::shared_ptr<MemoryBus> m_pMemory;
 	std::shared_ptr<Cpu> m_pCpu;
 };

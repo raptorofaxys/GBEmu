@@ -16,9 +16,8 @@ public:
 
 	static int const kDivFrequency = 16384;
 
-	Timer(const std::shared_ptr<MemoryBus>& memory, const std::shared_ptr<Cpu>& cpu)
-		: m_pMemory(memory)
-		, m_pCpu(cpu)
+	Timer(const std::shared_ptr<Cpu>& cpu)
+		: m_pCpu(cpu)
 	{
 		Reset();
 	}
@@ -101,7 +100,6 @@ public:
 	Uint8 TMA;
 	Uint8 TAC;
 private:
-	std::shared_ptr<MemoryBus> m_pMemory;
 	std::shared_ptr<Cpu> m_pCpu;
 	float m_DivTicksRemaining;
 	float m_TimaTicksRemaining;
