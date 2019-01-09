@@ -64,8 +64,8 @@ public:
 						//printf("Serial output byte: %c (0x%02lX)\n", m_SB, m_SB);
 						printf("%c", SB);
 						SC &= ~Bit7;
-						// Read zeroes
-						SB = 0;
+						// Read 0xFF, which is the default value in actual hardware
+						SB = 0xFF;
                         
                         m_pendingOutboundTransfer = true;
 					}
