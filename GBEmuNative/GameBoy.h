@@ -173,8 +173,6 @@ public:
 		// CPU cycles are counted here, and not in the CPU, because they are the atom of emulator execution
 		m_cyclesRemaining += seconds * MemoryBus::kCyclesPerSecond;
 	
-		const float timePerClockCycle = 1.0f / MemoryBus::kCyclesPerSecond;
-
 		for (;;)
 		{
 			if (m_pCpu->GetPC() != m_lastUpdateAddress)
@@ -203,13 +201,14 @@ public:
 				g_totalCyclesExecuted += instructionCycles;
 				m_cyclesRemaining -= instructionCycles;
 
-				auto timeSpentOnInstruction = timePerClockCycle * instructionCycles;
+                const float secondsPerClockCycle = 1.0f / MemoryBus::kCyclesPerSecond;
+                auto secondsSpentOnInstruction = secondsPerClockCycle * instructionCycles;
 
-				m_pTimer->Update(timeSpentOnInstruction);
-				m_pJoypad->Update(timeSpentOnInstruction);
-				m_pLcd->Update(timeSpentOnInstruction);
-				m_pSound->Update(timeSpentOnInstruction);
-                m_pGameLinkPort->Update(timeSpentOnInstruction);
+				m_pTimer->Update(secondsSpentOnInstruction);
+				m_pJoypad->Update(secondsSpentOnInstruction);
+				m_pLcd->Update(secondsSpentOnInstruction);
+				m_pSound->Update(secondsSpentOnInstruction);
+                m_pGameLinkPort->Update(secondsSpentOnInstruction);
 			}
 			else
 			{
