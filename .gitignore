@@ -233,6 +233,8 @@ FakesAssemblies/
 *.exe
 *.out
 *.app
+
+# local stuff for GBEmu
 workingdir/
 docs/
 
@@ -240,3 +242,4 @@ docs/
 *.vc.db
 
 *.args.json
+.vscode/
