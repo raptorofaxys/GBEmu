@@ -139,9 +139,10 @@ public:
 
 		void Reset()
 		{
-			m_volumeCounter = GetVolumeTimerPeriod();
+            m_volumeCounterPeriod = GetVolumeTimerPeriod();
+            m_volumeTickCounter = m_volumeCounterPeriod;
 			m_volume = GetInitialVolume();
-		}
+        }
 
 		Uint8 GetVolume() const // 0-15
 		{
@@ -155,14 +156,14 @@ public:
 
 		void Tick()
 		{
-			if (GetVolumeTimerPeriod() > 0)
+            if (m_volumeCounterPeriod > 0)
 			{
-				if (m_volumeCounter > 0)
+				if (m_volumeTickCounter > 0)
 				{
-					--m_volumeCounter;
-					if (m_volumeCounter == 0)
+                    --m_volumeTickCounter;
+					if (m_volumeTickCounter == 0)
 					{
-						if (m_NRx2 & Bit3)
+                        if (m_NRx2 & Bit3)
 						{
 							// Increase volume
 							if (m_volume < 0xF)
@@ -179,7 +180,7 @@ public:
 							}
 						}
 
-						m_volumeCounter = GetVolumeTimerPeriod();
+						m_volumeTickCounter = m_volumeCounterPeriod;
 					}
 				}
 			}
@@ -188,7 +189,8 @@ public:
 	private:
 		const Uint8& m_NRx2;
 
-		Uint8 m_volumeCounter;
+        Uint8 m_volumeCounterPeriod;
+        Uint8 m_volumeTickCounter;
 		Uint8 m_volume;
 	};
 
@@ -895,6 +897,7 @@ public:
 		//	lastLpf = lpf;
 	}
 
+
 	virtual bool HandleRequest(MemoryRequestType requestType, Uint16 address, Uint8& value)
 	{
 		if (ServiceMemoryRangeRequest(requestType, address, value, kWaveRamBase, kWaveRamSize, m_waveRam))
@@ -907,6 +910,7 @@ public:
 			switch (address)
 			{
 			case Registers::NR10:
+                //LOG_REGISTER_ACCESS();
 				{
 					if (requestType == MemoryRequestType::Read)
 					{
@@ -920,6 +924,7 @@ public:
 				}
 				break;
 			case Registers::NR11:
+                //LOG_REGISTER_ACCESS();
 				{
 					if (requestType == MemoryRequestType::Read)
 					{
@@ -935,7 +940,8 @@ public:
 				}
 				break;
 			case Registers::NR12:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR12 | 0x00;
@@ -948,7 +954,8 @@ public:
 				}
 				break;
 			case Registers::NR13:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR13 | 0xFF;
@@ -961,7 +968,8 @@ public:
 				}
 				break;
 			case Registers::NR14:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR14 | 0xBF;
@@ -984,7 +992,7 @@ public:
 				break;
 
 			case Registers::NR21:
-				{
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR21 | 0x3F;
@@ -999,7 +1007,7 @@ public:
 				}
 				break;
 			case Registers::NR22:
-				{
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR22 | 0x00;
@@ -1012,7 +1020,7 @@ public:
 				}
 				break;
 			case Registers::NR23:
-				{
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR23 | 0xFF;
@@ -1025,7 +1033,7 @@ public:
 				}
 				break;
 			case Registers::NR24:
-				{
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR24 | 0xBF;
@@ -1047,7 +1055,8 @@ public:
 				break;
 
 			case Registers::NR30:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR30 | 0x7F;
@@ -1060,7 +1069,8 @@ public:
 				}
 				break;
 			case Registers::NR31:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR31 | 0xFF;
@@ -1075,7 +1085,8 @@ public:
 				}
 				break;
 			case Registers::NR32:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR32 | 0x9F;
@@ -1088,7 +1099,8 @@ public:
 				}
 				break;
 			case Registers::NR33:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR33 | 0xFF;
@@ -1101,7 +1113,8 @@ public:
 				}
 				break;
 			case Registers::NR34:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR34 | 0xBF;
@@ -1122,7 +1135,8 @@ public:
 				break;
 
 			case Registers::NR41:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR41 | 0xFF;
@@ -1137,7 +1151,8 @@ public:
 				}
 				break;
 			case Registers::NR42:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR42 | 0x00;
@@ -1150,7 +1165,8 @@ public:
 				}
 				break;
 			case Registers::NR43:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR43 | 0x00;
@@ -1163,7 +1179,8 @@ public:
 				}
 				break;
 			case Registers::NR44:
-				{
+                //LOG_REGISTER_ACCESS();
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR44 | 0xBF;
@@ -1186,7 +1203,7 @@ public:
 			SERVICE_MMR_RW(NR50)
 			SERVICE_MMR_RW(NR51)
 			case Registers::NR52:
-				{
+                {
 					if (requestType == MemoryRequestType::Read)
 					{
 						value = NR52
