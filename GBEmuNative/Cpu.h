@@ -618,7 +618,6 @@ private:
 		SetFlagValue(FlagBitIndex::HalfCarry, false);
 
 		// Very strange behaviour on the carry flag - if there is a carry, it is set, otherwise it is untouched.
-		// Not sure this is truly how it behaves on a real DMG.
 		if (value & 0x100)
 		{
 			SetFlagValue(FlagBitIndex::Carry, true);
