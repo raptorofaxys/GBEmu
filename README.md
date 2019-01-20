@@ -13,6 +13,7 @@ Functionally speaking the emulator is complete and reasonably accurate. Though i
 ## Known Issues
 * HALT bug is not implemented
 * Zombie sound envelope sweeps are not implemented
+* Noise channel LFSR is not right but sounds good for the majority of games
 * There is a minor sound glitch (audible in e.g. Alleyway); sound channels do not quite mute when they should
 * There is a minor rendering glitch in Radar Mission Game Mode A when the game board fades in; there should be a kind of window-shade effect, but in this emulator the effect is a little janky and the screen flashes white a few times
 
@@ -23,7 +24,7 @@ Simply open the solution and build as usual. Everything should work out of the b
 The only external dependency is SDL2. This is included in the "external" folder under GBEmuNative.
 
 # How to Use
-Invoke the executable, and as the first argument, specify the file path to the ROM you wish to run.
+Invoke the executable; as the first argument, specify the working directory; as the second argument, specify the name of the ROM you wish to run.
 
 Directional pad input is mapped to cursor keys; A, B, Select and Start are mapped to P, O, Q and W, respectively.
 
