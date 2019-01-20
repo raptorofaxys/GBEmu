@@ -11,17 +11,27 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 //@TODO: bit manipulation utils
+#define BIT(x) Bit##x = 1 << x,
 enum
 {
-	Bit0 = 1 << 0,
-	Bit1 = 1 << 1,
-	Bit2 = 1 << 2,
-	Bit3 = 1 << 3,
-	Bit4 = 1 << 4,
-	Bit5 = 1 << 5,
-	Bit6 = 1 << 6,
-	Bit7 = 1 << 7,
+    BIT(0)
+    BIT(1)
+    BIT(2)
+    BIT(3)
+    BIT(4)
+    BIT(5)
+    BIT(6)
+    BIT(7)
+    BIT(8)
+    BIT(9)
+    BIT(10)
+    BIT(11)
+    BIT(12)
+    BIT(13)
+    BIT(14)
+    BIT(15)
 };
+#undef BIT
 
 inline Uint8 GetLow4(Uint8 u8) { return u8 & 0xF; }
 inline Uint8 GetHigh4(Uint8 u8) { return (u8 >> 4) & 0xF; }
